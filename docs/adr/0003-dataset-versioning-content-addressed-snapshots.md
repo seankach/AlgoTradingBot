@@ -1,8 +1,8 @@
 # ADR-0003: Dataset versioning via content-addressed snapshots + manifests (not DVC)
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-13
-- **Deciders:** (awaiting approval)
+- **Deciders:** Romesh Sharma (approved 2026-07-13)
 - **Charter refs:** §4, §2 invariants I2, I6; §8 (costs in `dataset_id`)
 
 ## Context

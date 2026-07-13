@@ -1,8 +1,8 @@
 # ADR-0001: Storage architecture — Parquet lake + DuckDB query layer + Postgres registry
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-13
-- **Deciders:** (awaiting approval)
+- **Deciders:** Romesh Sharma (approved 2026-07-13)
 - **Charter refs:** §4 (Architecture), §2 invariants I2, I6, I7
 
 ## Context

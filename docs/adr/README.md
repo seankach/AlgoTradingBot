@@ -25,7 +25,7 @@ approval**. Do not build on an unapproved decision. Once approved, set the statu
 
 | ADR | Title | Status |
 |-----|-------|--------|
-| [0001](0001-storage-architecture.md) | Storage architecture: Parquet lake + DuckDB + Postgres registry | Proposed |
-| [0002](0002-broker-abstraction-boundary.md) | Broker abstraction boundary (`MarketDataSource` / `Broker`) | Proposed |
-| [0003](0003-dataset-versioning-content-addressed-snapshots.md) | Dataset versioning via content-addressed snapshots + manifests | Proposed |
-| [0004](0004-bar-timestamp-semantics-and-point-in-time-correctness.md) | Bar timestamp semantics and the point-in-time rule | Proposed |
+| [0001](0001-storage-architecture.md) | Storage architecture: Parquet lake + DuckDB + Postgres registry | Accepted |
+| [0002](0002-broker-abstraction-boundary.md) | Broker abstraction boundary (`MarketDataSource` / `Broker`) | Accepted |
+| [0003](0003-dataset-versioning-content-addressed-snapshots.md) | Dataset versioning via content-addressed snapshots + manifests | Accepted |
+| [0004](0004-bar-timestamp-semantics-and-point-in-time-correctness.md) | Bar timestamp semantics and the point-in-time rule | Accepted |

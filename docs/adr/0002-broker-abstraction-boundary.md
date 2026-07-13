@@ -1,8 +1,8 @@
 # ADR-0002: Broker abstraction boundary — `MarketDataSource` / `Broker` protocols
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-13
-- **Deciders:** (awaiting approval)
+- **Deciders:** Romesh Sharma (approved 2026-07-13)
 - **Charter refs:** §4 (Broker isolation), §3 (public interfaces), §5 (data contract)
 
 ## Context

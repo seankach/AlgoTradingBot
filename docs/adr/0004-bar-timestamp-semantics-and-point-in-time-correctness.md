@@ -1,8 +1,8 @@
 # ADR-0004: Bar timestamp semantics and the point-in-time correctness rule
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-13
-- **Deciders:** (awaiting approval)
+- **Deciders:** Romesh Sharma (approved 2026-07-13)
 - **Charter refs:** §5 (data contract), §2 invariant I1 (no look-ahead), §7 (leakage tests)
 
 ## Context
