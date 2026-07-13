@@ -15,6 +15,8 @@ dependencies = [
     # IBKR SDK — imported ONLY within qrp.infrastructure.brokers.ibkr (ADR-0002),
     # enforced by the import-linter contract below.
     "ib_async>=1.0.1",
+    # Columnar data engine for the Parquet lake (ADR-0001). No pandas in the core.
+    "polars>=1.0",
 ]
 
 # PEP 735 dependency group. Installed with `uv sync` (default), excluded from the
