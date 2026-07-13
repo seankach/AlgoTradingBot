@@ -58,6 +58,8 @@ select = [
     "D",   # pydocstyle
     "RUF", # ruff-specific
 ]
+# D107: __init__ is documented in the class docstring (Google convention), not separately.
+ignore = ["D107"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
