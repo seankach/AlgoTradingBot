@@ -170,3 +170,13 @@ class Ingestor:
         if start is None:
             return None
         return self._ingest_window(symbol, what_to_show, start, self._clock())
+
+    def is_complete(self, symbol: str, what_to_show: WhatToShow, *, tolerance: timedelta) -> bool:
+        """Whether stored data for this series reaches within ``tolerance`` of now.
+
+        Used by the ``status`` mode so a supervisor can tell a caught-up backfill from one
+        that merely stopped early. ``tolerance`` absorbs the non-trading gap (weekends,
+        holidays) between the last available bar and the wall clock.
+        """
+        end = self._latest_end(symbol, what_to_show)
+        return end is not None and end >= self._clock() - tolerance

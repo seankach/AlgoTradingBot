@@ -125,6 +125,32 @@ def test_backfill_resumes_from_frontier(tmp_path: Path) -> None:
     assert first_fetch_start > data_start + timedelta(days=1)
 
 
+def test_is_complete_tracks_frontier(tmp_path: Path) -> None:
+    now = datetime(2024, 6, 10, tzinfo=UTC)
+    source = FakeSource(now - timedelta(days=10), data_end=now)
+    ingestor = _ingestor(source, tmp_path, now)
+    tol = timedelta(days=4)
+
+    # No data yet -> not complete.
+    assert not ingestor.is_complete("TSLA", WhatToShow.TRADES, tolerance=tol)
+
+    ingestor.backfill("TSLA", WhatToShow.TRADES, window=timedelta(days=5))
+    # Caught up to ~now -> complete for TRADES, still not for the un-ingested BID_ASK.
+    assert ingestor.is_complete("TSLA", WhatToShow.TRADES, tolerance=tol)
+    assert not ingestor.is_complete("TSLA", WhatToShow.BID_ASK, tolerance=tol)
+
+
+def test_is_complete_false_when_far_behind(tmp_path: Path) -> None:
+    # Data ends long before "now" -> a stalled backfill must read as incomplete.
+    data_end = datetime(2012, 1, 1, tzinfo=UTC)
+    source = FakeSource(datetime(2011, 1, 1, tzinfo=UTC), data_end=data_end)
+    ingestor = _ingestor(source, tmp_path, now=data_end)
+    ingestor.backfill("TSLA", WhatToShow.TRADES, window=timedelta(days=30))
+    # Ask relative to a much later "now".
+    later = _ingestor(source, tmp_path, now=datetime(2026, 1, 1, tzinfo=UTC))
+    assert not later.is_complete("TSLA", WhatToShow.TRADES, tolerance=timedelta(days=4))
+
+
 def test_backfill_skips_when_no_depth(tmp_path: Path) -> None:
     now = datetime(2024, 1, 4, tzinfo=UTC)
 
