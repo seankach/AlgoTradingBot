@@ -5,25 +5,34 @@ An institutional-quality quantitative **research** platform trading a single ins
 [`CLAUDE.md`](CLAUDE.md) — read it before contributing. Research quality beats backtest
 performance, always.
 
-> **Status: Phase 1, Stage A (Foundation).** Only the foundation and the four gating ADRs
-> exist. IBKR ingestion (Stage B) begins after the ADRs are approved.
+> **Status: Phase 1 complete (Stage A + Stage B), ADRs accepted.** The full IBKR ingestion
+> pipeline is built and tested against fixtures. Producing the real dataset + evidence
+> requires a live IB gateway (see below).
 
 ## What's here now
 
 ```
 config/                 # YAML configuration (one file per domain; costs.yaml per §8)
-docs/adr/               # Architecture Decision Records (0001–0004 proposed, awaiting approval)
-docker/mlflow/          # MLflow server image
-docker-compose.yml      # PostgreSQL + MLflow local stack
+docs/adr/               # Architecture Decision Records (0001–0004, Accepted)
+docs/ibkr-open-questions.md  # live-gateway behaviours to confirm (OQ-1…OQ-6)
+docker/                 # MLflow server image; docker-compose.yml = Postgres + MLflow
 src/qrp/
+  base.py               # shared strict Pydantic base
   config/               # Pydantic v2 models + YAML loader (validated at load)
   observability/        # structlog → JSON logging conventions
-tests/                  # unit tests for config + logging
-.github/workflows/ci.yml# quality gates (CLAUDE.md §9)
+  domain/               # broker-neutral Bar + MarketDataSource/Broker protocols (ADR-0002)
+  infrastructure/
+    brokers/ibkr/       # ib_async adapter: pacing, hybrid depth probe, paced fetch
+    storage/            # immutable content-addressed Parquet snapshots (ADR-0001/0003)
+  validation/           # conflicts, session tagging, gap index, quality flags (§5)
+  ingestion/            # backfill + daily incremental orchestrator + CLI
+  reporting/            # evidence: earliest depth, session counts, spread distribution
+tests/                  # unit + fixture-based tests (never a live gateway, §9)
+.github/workflows/ci.yml# quality gates + import-linter boundary (CLAUDE.md §9)
 ```
 
-Stage B directories (`infrastructure/brokers/ibkr/`, ingestion, storage) are intentionally
-**not** created yet — the charter forbids empty packages reserved for later (§3, §10).
+The `ib_async` import is confined to `infrastructure/brokers/ibkr/`, enforced by an
+import-linter contract in CI (ADR-0002).
 
 ## Setup
 
@@ -43,6 +52,21 @@ Local research services (PostgreSQL + MLflow):
 cp .env.example .env         # then edit credentials
 docker compose up -d         # Postgres :5432, MLflow UI :5000
 ```
+
+## Running ingestion (needs a live IB gateway)
+
+With IB Gateway/TWS running on the port in `config/ibkr.yaml` (7497 = TWS paper):
+
+```bash
+uv run python -m qrp.ingestion --config config --mode auto   # backfill, then incremental
+uv run python -m qrp.reporting --config config               # print the evidence report
+```
+
+The ingester discovers TSLA's true earliest 1-minute timestamp (no hardcoded start),
+respects IBKR pacing by construction (≤60 req/10 min, BID_ASK ×2), stores immutable
+content-addressed snapshots, and never overwrites. The reporting command reads what's on
+disk (no gateway needed) and prints the earliest depth, session row counts, and BID_ASK
+spread distribution by session.
 
 ## Configuration
 
