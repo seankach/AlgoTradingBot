@@ -130,13 +130,20 @@ class Ingestor:
         *,
         window: timedelta = _DEFAULT_WINDOW,
     ) -> list[SnapshotManifest]:
-        """Ingest the full available history in windows, one snapshot per window."""
+        """Ingest available history in windows, one snapshot per window.
+
+        Resumable: starts at the last stored bar if any snapshots already exist, else at
+        the discovered earliest timestamp. So an interrupted backfill continues forward
+        rather than restarting, and a daily run is just a one-window backfill of the tail.
+        """
         earliest = self.discover_earliest(symbol, what_to_show)
         if earliest is None:
             return []
+        resume = self._latest_end(symbol, what_to_show)
+        start = max(resume, earliest) if resume is not None else earliest
         now = self._clock()
         manifests: list[SnapshotManifest] = []
-        cursor = earliest
+        cursor = start
         while cursor < now:
             window_end = min(cursor + window, now)
             manifest = self._ingest_window(symbol, what_to_show, cursor, window_end)

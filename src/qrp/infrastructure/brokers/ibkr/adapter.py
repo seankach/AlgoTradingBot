@@ -32,10 +32,12 @@ _log = get_logger(__name__)
 _PACING_WINDOW_SECONDS = 600.0
 _MAX_REQUEST_RETRIES = 5
 _BACKOFF_BASE_SECONDS = 2.0
-# Per-request history duration by bar size. Conservative so no single request is rejected
-# for exceeding IBKR's per-request bar cap (OQ-3).
-_DURATION_BY_BAR_SIZE: Mapping[str, str] = {"1 min": "1 D"}
-_DEFAULT_DURATION = "1 D"
+_REQUEST_TIMEOUT_SECONDS = 120.0
+# Per-request history duration by bar size. Empirically (OQ-3) IBKR serves ~9,000 1-min
+# bars for "10 D" comfortably but times out at "30 D"; "10 D" keeps request counts ~10x
+# lower than a per-day walk while staying well inside the per-request ceiling.
+_DURATION_BY_BAR_SIZE: Mapping[str, str] = {"1 min": "10 D"}
+_DEFAULT_DURATION = "10 D"
 # Depth-probe: stride forward from the head-timestamp anchor looking for the first 1-min
 # data (OQ-1). Bounded so the loop always terminates.
 _PROBE_STRIDE = timedelta(days=30)
@@ -77,6 +79,8 @@ class IBClient(Protocol):
         whatToShow: str,
         useRTH: bool,
         formatDate: int,
+        *,
+        timeout: float = 60,
     ) -> Sequence[BarData]:
         """Return historical bars ending at ``endDateTime`` spanning ``durationStr``."""
 
@@ -205,6 +209,7 @@ class IBKRMarketDataSource:
                     whatToShow=str(what_to_show),
                     useRTH=use_rth,
                     formatDate=2,
+                    timeout=_REQUEST_TIMEOUT_SECONDS,
                 )
             except Exception as exc:  # IBKR error surface is broad; retry/backoff (OQ-4)
                 last_error = exc

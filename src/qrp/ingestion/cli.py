@@ -55,22 +55,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     with source.connected():
         for spec in config.universe.symbols:
             for series in _SERIES:
-                has_history = store_has_history(store, spec.symbol, series)
-                use_update = args.mode == "update" or (args.mode == "auto" and has_history)
-                if use_update:
+                if args.mode == "update":
                     ingestor.incremental(spec.symbol, series)
                 else:
+                    # "backfill" and "auto": backfill resumes from the frontier, so it
+                    # both fills history and picks up a daily tail as a one-window run.
                     ingestor.backfill(spec.symbol, series)
     _log.info("ingest.cli.done", mode=args.mode)
     return 0
-
-
-def store_has_history(store: SnapshotStore, symbol: str, what_to_show: WhatToShow) -> bool:
-    """Return whether any snapshot already exists for this symbol/series."""
-    return any(
-        manifest.symbol == symbol and manifest.what_to_show == what_to_show
-        for manifest in store.list_manifests()
-    )
 
 
 if __name__ == "__main__":

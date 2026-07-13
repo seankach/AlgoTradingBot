@@ -81,6 +81,8 @@ class FakeIB:
         whatToShow: str,
         useRTH: bool,
         formatDate: int,
+        *,
+        timeout: float = 60,
     ) -> list[FakeBar]:
         self.request_ends.append(endDateTime)
         days = int(durationStr.split()[0])

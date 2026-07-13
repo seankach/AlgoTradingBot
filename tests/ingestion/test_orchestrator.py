@@ -107,6 +107,24 @@ def test_incremental_resumes_from_last_end(tmp_path: Path) -> None:
     assert resume_end == now2
 
 
+def test_backfill_resumes_from_frontier(tmp_path: Path) -> None:
+    data_start = datetime(2024, 1, 1, tzinfo=UTC)
+    source = FakeSource(data_start, data_end=datetime(2024, 1, 10, tzinfo=UTC))
+
+    # First backfill up to Jan 4.
+    _ingestor(source, tmp_path, now=datetime(2024, 1, 4, tzinfo=UTC)).backfill(
+        "TSLA", WhatToShow.TRADES, window=timedelta(days=1)
+    )
+
+    # A later backfill must resume near the frontier, not restart at data_start.
+    source.fetch_calls.clear()
+    _ingestor(source, tmp_path, now=datetime(2024, 1, 7, tzinfo=UTC)).backfill(
+        "TSLA", WhatToShow.TRADES, window=timedelta(days=1)
+    )
+    first_fetch_start = source.fetch_calls[0][0]
+    assert first_fetch_start > data_start + timedelta(days=1)
+
+
 def test_backfill_skips_when_no_depth(tmp_path: Path) -> None:
     now = datetime(2024, 1, 4, tzinfo=UTC)
 
