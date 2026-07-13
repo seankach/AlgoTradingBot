@@ -1,0 +1,7 @@
+# Storage layout. data_root is required; subdirectories default (see StoragePathsConfig).
+# The lake lives outside the repo and is git-ignored (raw data is immutable, not source).
+data_root: "./data"
+raw_snapshots_subdir: "raw_snapshots"
+validated_bars_subdir: "validated_bars"
+manifests_subdir: "manifests"
+duckdb_subpath: "catalog/qrp.duckdb"

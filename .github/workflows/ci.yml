@@ -1,0 +1,55 @@
+name: CI
+
+# Enforces the quality gates in CLAUDE.md §9. Every gate is blocking.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Sync dependencies (locked)
+        run: uv sync --frozen --python ${{ matrix.python-version }}
+
+      # Black must never appear anywhere (CLAUDE.md §4). Check the resolved environment
+      # itself rather than grepping text, so policy comments never trip the guard.
+      - name: Assert Black is absent
+        run: |
+          if uv run python -c "import importlib.util, sys; sys.exit(1 if importlib.util.find_spec('black') else 0)"; then
+            echo "OK: Black is not installed."
+          else
+            echo "::error::Black must never be added to this project (CLAUDE.md §4)."
+            exit 1
+          fi
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: mypy (strict)
+        run: uv run mypy
+
+      - name: pytest
+        run: uv run pytest

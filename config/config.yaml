@@ -1,0 +1,4 @@
+# Top-level configuration metadata.
+# config_version is stamped into provenance so any result can be traced back to the
+# exact configuration that produced it (invariant I6).
+config_version: "2026.07.13"

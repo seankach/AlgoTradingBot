@@ -1,0 +1,6 @@
+# Session scope (§5).
+# Ingest everything (useRTH=0); trade an explicit, versioned subset.
+# Default research scope = PRE + RTH + POST. OVERNIGHT is ingested but excluded until
+# its data quality and spread behaviour are independently verified.
+ingest_sessions: ["PRE", "RTH", "POST", "OVERNIGHT"]
+tradable_sessions: ["PRE", "RTH", "POST"]

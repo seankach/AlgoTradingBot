@@ -1,0 +1,12 @@
+# Label specification (§6). The barriers ARE the strategy (invariant I3).
+# Purge/embargo are DERIVED from this horizon downstream and are intentionally not
+# configurable here (§7).
+version: "2026.07.13"
+method: "triple_barrier"
+barrier_sigma_multiple_k: 2.0      # +/- k * sigma horizontal barriers
+vertical_barrier_bars_h: 30        # timeout horizon, in bars (wall-clock minutes)
+
+volatility:
+  method: "ewma"                   # causal EWMA of 1-min returns
+  window_bars: 60                  # trailing window (span)
+  session_conditional: true        # open-hour vol != midday vol; do not share estimator

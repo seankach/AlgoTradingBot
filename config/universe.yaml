@@ -1,0 +1,7 @@
+# Symbol universe. Phase 1 trades a single instrument.
+symbols:
+  - symbol: "TSLA"
+    sec_type: "STK"
+    exchange: "SMART"
+    primary_exchange: "NASDAQ"   # disambiguates the SMART contract
+    currency: "USD"

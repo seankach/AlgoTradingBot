@@ -1,0 +1,19 @@
+# Cost model — FROZEN (invariant I4). Never tuned to improve a result.
+#
+# ACTION REQUIRED: the commission numbers below are IBKR's published US-stock Tiered
+# schedule as a starting point. Replace them with the EXACT rates from YOUR account's
+# commission schedule before running any result you intend to trust (§8). Any change
+# here bumps `version` and invalidates every prior result computed under the old value.
+version: "2026.07.13"
+
+commission:
+  per_share_usd: 0.0035           # IBKR Tiered US equities, per share
+  min_per_order_usd: 0.35         # per-order minimum
+  max_percent_of_trade_value: 0.01  # 1% of trade value cap
+  exchange_regulatory_fees_bps: 0.2 # exchange + regulatory/pass-through, in bps
+
+spread_cross_fraction: 0.5        # fill crosses half the prevailing quoted spread
+fixed_impact_bps: 1.0             # fixed market-impact term, basis points
+
+# Every result is also reported at 2x and 3x costs (§8). 1x/2x/3x are mandatory.
+cost_multipliers: [1.0, 2.0, 3.0]

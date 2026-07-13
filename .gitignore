@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Environments
+.venv/
+venv/
+.env
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data lake — never commit ingested market data (immutable, lives on disk/object store)
+/data/
+*.parquet
+*.duckdb
+
+# MLflow / Docker local volumes
+/mlflow/
+/docker/**/artifacts/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
