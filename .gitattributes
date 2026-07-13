@@ -1,0 +1,10 @@
+# Normalize line endings to LF for all text so CI (Linux) and dev (Windows) agree
+# and `ruff format --check` never trips on CRLF.
+* text=auto eol=lf
+
+# Binary assets
+*.parquet binary
+*.duckdb binary
+*.png binary
+*.jpg binary
+*.gz binary
