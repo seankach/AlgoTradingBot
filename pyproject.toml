@@ -17,6 +17,8 @@ dependencies = [
     "ib_async>=1.0.1",
     # Columnar data engine for the Parquet lake (ADR-0001). No pandas in the core.
     "polars>=1.0",
+    # Exchange session boundaries — a first-class dependency, not a helper (§4, §5).
+    "exchange_calendars>=4.5",
 ]
 
 # PEP 735 dependency group. Installed with `uv sync` (default), excluded from the
@@ -100,6 +102,13 @@ files = ["src", "tests"]
 init_forbid_extra = true
 init_typed = true
 warn_required_dynamic_aliases = true
+
+# exchange_calendars ships no type stubs (py.typed). It is used only at the calendar
+# boundary in qrp.validation.sessions and its outputs are immediately converted to plain
+# datetimes / Polars.
+[[tool.mypy.overrides]]
+module = ["exchange_calendars.*"]
+ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------
 # pytest
