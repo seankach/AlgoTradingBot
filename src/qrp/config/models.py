@@ -21,7 +21,9 @@ from pathlib import Path
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
+
+from qrp.base import StrictModel as _Strict
 
 _LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"})
 
@@ -37,12 +39,6 @@ class Session(StrEnum):
     RTH = "RTH"
     POST = "POST"
     OVERNIGHT = "OVERNIGHT"
-
-
-class _Strict(BaseModel):
-    """Base model: immutable, and unknown keys raise instead of being ignored."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
 
 
 class IBKRConnectionConfig(_Strict):
