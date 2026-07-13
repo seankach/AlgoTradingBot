@@ -51,5 +51,8 @@ jobs:
       - name: mypy (strict)
         run: uv run mypy
 
+      - name: import-linter (broker boundary, ADR-0002)
+        run: uv run lint-imports
+
       - name: pytest
         run: uv run pytest

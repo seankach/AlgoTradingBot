@@ -12,6 +12,9 @@ dependencies = [
     # IANA timezone database for `zoneinfo`. Required on platforms without a system tz
     # database (e.g. Windows); timezone pinning per CLAUDE.md §5 depends on it.
     "tzdata>=2024.1",
+    # IBKR SDK — imported ONLY within qrp.infrastructure.brokers.ibkr (ADR-0002),
+    # enforced by the import-linter contract below.
+    "ib_async>=1.0.1",
 ]
 
 # PEP 735 dependency group. Installed with `uv sync` (default), excluded from the
@@ -23,6 +26,7 @@ dev = [
     "pytest>=8.3",
     "pytest-cov>=5.0",
     "types-PyYAML>=6.0",
+    "import-linter>=2.0",
 ]
 
 [build-system]
@@ -68,8 +72,12 @@ convention = "google"
 ban-relative-imports = "all"
 
 [tool.ruff.lint.per-file-ignores]
-# Tests do not require docstrings, full annotations, or magic-value bans.
-"tests/**" = ["D", "ANN", "S101"]
+# Tests do not require docstrings or full annotations; fakes mirror ib_async's
+# camelCase names on purpose (N802/N803/N815).
+"tests/**" = ["D", "ANN", "S101", "N802", "N803", "N815"]
+# The IBClient protocol mirrors ib_async's camelCase API names on purpose (structural
+# typing must match the real client); N802/N803 do not apply there.
+"src/qrp/infrastructure/brokers/ibkr/adapter.py" = ["N802", "N803"]
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -99,3 +107,20 @@ minversion = "8.0"
 addopts = "-ra --strict-markers --strict-config"
 testpaths = ["tests"]
 pythonpath = ["src", "."]
+
+# ---------------------------------------------------------------------------
+# import-linter — enforces the broker boundary (ADR-0002): ib_async may be
+# imported only within qrp.infrastructure.brokers.ibkr.
+# ---------------------------------------------------------------------------
+[tool.importlinter]
+root_package = "qrp"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "ib_async is confined to the IBKR adapter (ADR-0002)"
+type = "forbidden"
+source_modules = ["qrp"]
+forbidden_modules = ["ib_async"]
+ignore_imports = [
+    "qrp.infrastructure.brokers.ibkr.** -> ib_async",
+]
