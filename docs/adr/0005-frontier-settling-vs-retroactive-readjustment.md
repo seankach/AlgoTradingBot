@@ -1,8 +1,8 @@
 # ADR-0005: Frontier settling vs. retroactive re-adjustment in conflict detection
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-14
-- **Deciders:** (awaiting approval)
+- **Deciders:** Romesh Sharma (approved 2026-07-14; settling horizon set to 2 days)
 - **Charter refs:** §5 (data contract, incomplete last bar), §2 invariant I2; refines ADR-0003
 
 ## Context
@@ -40,9 +40,9 @@ a split, re-fetched long after they closed).
   **read/assemble** step changes.
 - `find_conflicts` / `assert_no_conflicts` take a `settled_before` cutoff; only bars with
   `ts_utc < settled_before` are compared for re-adjustment.
-- `assemble_validated` sets `settled_before = max(fetch_ts_utc) - SETTLING_HORIZON` (currently
-  **3 days**), asserts no conflicts among settled bars, then resolves any remaining overlaps by
-  keeping the row with the latest `fetch_ts_utc`.
+- `assemble_validated` sets `settled_before = max(fetch_ts_utc) - SETTLING_HORIZON` (**2 days**),
+  asserts no conflicts among settled bars, then resolves any remaining overlaps by keeping the
+  row with the latest `fetch_ts_utc`.
 - Split re-adjustments (old bars, re-fetched years later) are always older than the horizon,
   so they still raise. Frontier settling (bars re-fetched within days) is resolved to the most
   recent, most-complete value.
@@ -51,10 +51,10 @@ a split, re-fetched long after they closed).
 
 - Reporting/validation is robust to incremental re-fetching while retaining the split-detection
   teeth for genuine history rewrites (§5, I2 preserved).
-- Introduces one tunable, `SETTLING_HORIZON` (3 days). Too small risks flagging slow-settling
+- Introduces one tunable, `SETTLING_HORIZON` (2 days). Too small risks flagging slow-settling
   thin-session bars; too large risks masking a re-adjustment that happens to touch very recent
-  data (rare — splits rewrite deep history). 3 days covers observed extended-hours settling and
-  a long weekend.
+  data (rare — splits rewrite deep history). 2 days gives safe margin over the observed ~1-day
+  settling while keeping re-adjustment detection strict.
 - Follow-up (not required by this ADR): ingestion could additionally drop the incomplete last
   bar at fetch time (`ts_utc > now - bar_size`) to reduce frontier churn at the source.
 - Reproducibility (I6) is unaffected: given the same snapshots, assembly is deterministic

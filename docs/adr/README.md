@@ -29,4 +29,4 @@ approval**. Do not build on an unapproved decision. Once approved, set the statu
 | [0002](0002-broker-abstraction-boundary.md) | Broker abstraction boundary (`MarketDataSource` / `Broker`) | Accepted |
 | [0003](0003-dataset-versioning-content-addressed-snapshots.md) | Dataset versioning via content-addressed snapshots + manifests | Accepted |
 | [0004](0004-bar-timestamp-semantics-and-point-in-time-correctness.md) | Bar timestamp semantics and the point-in-time rule | Accepted |
-| [0005](0005-frontier-settling-vs-retroactive-readjustment.md) | Frontier settling vs. retroactive re-adjustment in conflict detection | Proposed |
+| [0005](0005-frontier-settling-vs-retroactive-readjustment.md) | Frontier settling vs. retroactive re-adjustment in conflict detection | Accepted |

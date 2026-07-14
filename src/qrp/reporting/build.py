@@ -21,7 +21,7 @@ from qrp.validation.sessions import SessionTagger
 
 # Bars within this window of the latest fetch may still be settling (late prints, the
 # incomplete last bar) and are excluded from re-adjustment detection (ADR-0005).
-_SETTLING_HORIZON = timedelta(days=3)
+_SETTLING_HORIZON = timedelta(days=2)
 
 
 def load_series_frames(
