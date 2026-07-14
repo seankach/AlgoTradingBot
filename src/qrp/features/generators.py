@@ -24,23 +24,23 @@ def _log_close() -> pl.Expr:
 
 @dataclass(frozen=True)
 class LaggedReturns:
-    """Lagged log returns of close over the configured minute horizons."""
+    """Lagged log returns of close over the configured horizons, in bars (ADR-0008)."""
 
-    horizons_min: tuple[int, ...]
+    horizons_bars: tuple[int, ...]
     name: str = "lagged_returns"
     is_deterministic: bool = False
 
     @property
     def output_columns(self) -> tuple[str, ...]:
-        """One ``ret_{h}m`` column per configured horizon."""
-        return tuple(f"ret_{h}m" for h in self.horizons_min)
+        """One ``ret_{h}b`` column per configured horizon (bars)."""
+        return tuple(f"ret_{h}b" for h in self.horizons_bars)
 
     def generate(self, bars: pl.DataFrame) -> pl.DataFrame:
-        """Compute ``ln(close_t / close_{t-h})`` per horizon, within the session date."""
+        """Compute ``ln(close_t / close_{t-h bars})`` per horizon, within the session date."""
         log_close = _log_close()
         exprs = [
-            (log_close - log_close.shift(h)).over(_SESSION_DATE).alias(f"ret_{h}m")
-            for h in self.horizons_min
+            (log_close - log_close.shift(h)).over(_SESSION_DATE).alias(f"ret_{h}b")
+            for h in self.horizons_bars
         ]
         return bars.select("ts_utc", *exprs)
 
@@ -77,9 +77,9 @@ class BarrierVolatility:
 
 @dataclass(frozen=True)
 class RangeVolatility:
-    """Parkinson high-low volatility over a trailing window (an independent OHLC estimate)."""
+    """Parkinson high-low volatility over a trailing window in bars (an independent estimate)."""
 
-    window_min: int
+    window_bars: int
     name: str = "range_vol"
     is_deterministic: bool = False
 
@@ -95,7 +95,7 @@ class RangeVolatility:
         )
         parkinson = (
             (hl / (4.0 * math.log(2.0)))
-            .rolling_mean(window_size=self.window_min, min_samples=1)
+            .rolling_mean(window_size=self.window_bars, min_samples=1)
             .over(_SESSION_DATE)
         )
         return bars.select("ts_utc", parkinson.sqrt().alias("range_vol"))
@@ -103,9 +103,9 @@ class RangeVolatility:
 
 @dataclass(frozen=True)
 class RelativeVolume:
-    """Trailing-window z-score of volume (IBKR's *view* of volume, §5)."""
+    """Trailing-window (bars) z-score of volume (IBKR's *view* of volume, §5)."""
 
-    window_min: int
+    window_bars: int
     name: str = "relative_volume"
     is_deterministic: bool = False
 
@@ -117,8 +117,8 @@ class RelativeVolume:
     def generate(self, bars: pl.DataFrame) -> pl.DataFrame:
         """Compute the trailing z-score of volume within the session date."""
         volume = pl.col("volume")
-        mean = volume.rolling_mean(window_size=self.window_min, min_samples=2).over(_SESSION_DATE)
-        std = volume.rolling_std(window_size=self.window_min, min_samples=2).over(_SESSION_DATE)
+        mean = volume.rolling_mean(window_size=self.window_bars, min_samples=2).over(_SESSION_DATE)
+        std = volume.rolling_std(window_size=self.window_bars, min_samples=2).over(_SESSION_DATE)
         z = pl.when(std > 0).then((volume - mean) / std).otherwise(None)
         return bars.select("ts_utc", z.alias("rel_volume"))
 

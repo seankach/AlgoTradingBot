@@ -25,6 +25,7 @@ class DatasetManifest(StrictModel):
     symbol: str
     built_at_utc: datetime
     git_sha: str
+    bar_spec_version: str
     feature_spec_version: str
     label_spec_version: str
     cost_model_version: str
@@ -36,17 +37,20 @@ class DatasetManifest(StrictModel):
 def compute_dataset_id(
     *,
     raw_snapshot_ids: Sequence[str],
+    bar_spec_version: str,
     feature_spec_version: str,
     label_spec_version: str,
     cost_model_version: str,
     git_sha: str,
 ) -> str:
-    """Return the content hash that identifies a research dataset (ADR-0003).
+    """Return the content hash that identifies a research dataset (ADR-0003/0008).
 
     Deterministic: raw snapshot ids are sorted so ordering cannot change the id.
+    ``bar_spec_version`` is included so datasets on different samplers cannot collide.
     """
     parts = [
         "raw:" + ",".join(sorted(raw_snapshot_ids)),
+        "bar:" + bar_spec_version,
         "feature:" + feature_spec_version,
         "label:" + label_spec_version,
         "cost:" + cost_model_version,

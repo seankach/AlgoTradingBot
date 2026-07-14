@@ -193,11 +193,11 @@ class FeatureSpecConfig(_Strict):
     """
 
     version: str = Field(..., min_length=1)
-    return_horizons_min: list[int] = Field(..., min_length=1)
-    range_vol_window_min: int = Field(..., gt=1)
-    relative_volume_window_min: int = Field(..., gt=1)
+    return_horizons_bars: list[int] = Field(..., min_length=1)
+    range_vol_window_bars: int = Field(..., gt=1)
+    relative_volume_window_bars: int = Field(..., gt=1)
 
-    @field_validator("return_horizons_min")
+    @field_validator("return_horizons_bars")
     @classmethod
     def _positive_unique_horizons(cls, value: list[int]) -> list[int]:
         if any(h <= 0 for h in value):

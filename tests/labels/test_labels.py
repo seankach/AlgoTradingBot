@@ -13,7 +13,7 @@ from qrp.labels.triple_barrier import TripleBarrier
 
 _START = datetime(2024, 1, 3, 15, 0, tzinfo=UTC)  # RTH
 # k=2, sigma=0.01 -> barriers at +/-2% of the entry open (100 -> 102 / 98).
-_TB = TripleBarrier(k=2.0, h_minutes=5)
+_TB = TripleBarrier(k=2.0, h_bars=5)
 
 
 def _frames(
@@ -57,7 +57,8 @@ def test_take_profit_label() -> None:
     row = _first(_TB.generate(bars, sigma))
     assert row["label"] == 1
     assert row["touched"] == "tp"
-    assert isinstance(row["realized_return"], float) and row["realized_return"] > 0
+    gross = row["gross_return"]
+    assert isinstance(gross, float) and gross > 0
     assert row["entry_ts"] == _START + timedelta(minutes=1)
 
 
@@ -75,8 +76,8 @@ def test_stop_loss_label() -> None:
     row = _first(_TB.generate(bars, sigma))
     assert row["label"] == -1
     assert row["touched"] == "sl"
-    realized = row["realized_return"]
-    assert isinstance(realized, float) and realized < 0
+    gross = row["gross_return"]
+    assert isinstance(gross, float) and gross < 0
 
 
 def test_vertical_timeout_label() -> None:
@@ -87,7 +88,9 @@ def test_vertical_timeout_label() -> None:
     assert row["touched"] == "vertical"
 
 
-def test_ambiguous_same_bar_touch_is_zero() -> None:
+def test_same_bar_both_touch_resolves_to_stop() -> None:
+    # A bar spanning both barriers is a whipsaw; OHLCV cannot reveal order, so resolve
+    # conservatively to the stop (label -1), keeping touched="both" as a diagnostic (ADR-0008).
     bars, sigma = _frames(
         [
             (100, 100.0, 100.0, 100.0),
@@ -97,8 +100,10 @@ def test_ambiguous_same_bar_touch_is_zero() -> None:
         ]
     )
     row = _first(_TB.generate(bars, sigma))
-    assert row["label"] == 0
+    assert row["label"] == -1  # conservative stop, NOT a silent 0/timeout
     assert row["touched"] == "both"
+    gross = row["gross_return"]
+    assert isinstance(gross, float) and gross < 0  # exit at the lower barrier
 
 
 def test_entry_skips_untraded_bar() -> None:

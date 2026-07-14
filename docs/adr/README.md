@@ -32,3 +32,4 @@ approval**. Do not build on an unapproved decision. Once approved, set the statu
 | [0005](0005-frontier-settling-vs-retroactive-readjustment.md) | Frontier settling vs. retroactive re-adjustment in conflict detection | Accepted |
 | [0006](0006-feature-store-interface-and-point-in-time-contract.md) | Feature store: interface, point-in-time contract, initial feature spec | Accepted |
 | [0007](0007-triple-barrier-label-spec-and-barrier-volatility.md) | Triple-barrier label spec, exit-policy unity, and barrier volatility | Accepted |
+| [0008](0008-pit-and-horizon-corrections-from-review.md) | Point-in-time, horizon, and tie-break corrections (external review) | Accepted |

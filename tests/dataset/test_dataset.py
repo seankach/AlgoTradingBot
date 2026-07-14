@@ -17,6 +17,7 @@ _START = datetime(2024, 1, 3, 15, 0, tzinfo=UTC)
 def _kwargs() -> dict[str, object]:
     return {
         "raw_snapshot_ids": ["a", "b", "c"],
+        "bar_spec_version": "b1",
         "feature_spec_version": "f1",
         "label_spec_version": "l1",
         "cost_model_version": "c1",
@@ -35,6 +36,7 @@ class TestDatasetId:
         base = compute_dataset_id(**_kwargs())  # type: ignore[arg-type]
         for field, value in [
             ("raw_snapshot_ids", ["a", "b"]),
+            ("bar_spec_version", "b2"),
             ("feature_spec_version", "f2"),
             ("label_spec_version", "l2"),
             ("cost_model_version", "c2"),
@@ -51,7 +53,7 @@ def _features(n: int) -> pl.DataFrame:
             "ts_utc": ts,
             "session": ["RTH"] * n,
             "is_traded": [True] * n,
-            "ret_1m": [0.001 * i for i in range(n)],
+            "ret_1b": [0.001 * i for i in range(n)],
             "ewma_vol": [0.01] * n,
         }
     )
@@ -65,7 +67,7 @@ def _labels(decision_indices: list[int]) -> pl.DataFrame:
             "exit_ts": [_START + timedelta(minutes=i + 5) for i in decision_indices],
             "label": [1, -1, 0][: len(decision_indices)],
             "touched": ["tp", "sl", "vertical"][: len(decision_indices)],
-            "realized_return": [0.02, -0.02, 0.0][: len(decision_indices)],
+            "gross_return": [0.02, -0.02, 0.0][: len(decision_indices)],
             "sigma": [0.01] * len(decision_indices),
         }
     )
@@ -79,7 +81,7 @@ def test_assemble_aligns_features_at_decision_ts() -> None:
     assert dataset.height == 3
     # The feature value on each row must be the one stamped at that decision_ts.
     row = dataset.filter(pl.col("decision_ts") == _START + timedelta(minutes=4)).row(0, named=True)
-    assert row["ret_1m"] == 0.004  # ret_1m at minute 4
+    assert row["ret_1b"] == 0.004  # feature value at decision minute 4
     assert row["label"] == -1
     for column in ("entry_ts", "exit_ts", "sigma", "session"):
         assert column in dataset.columns
@@ -92,11 +94,12 @@ def test_build_and_store_round_trip(tmp_path: Path) -> None:
         _labels([2, 4, 6]),
         store,
         symbol="TSLA",
+        bar_spec_version="b1",
         feature_spec_version="f1",
         label_spec_version="l1",
         cost_model_version="c1",
         raw_snapshot_ids=["a", "b"],
-        feature_columns=["ret_1m", "ewma_vol"],
+        feature_columns=["ret_1b", "ewma_vol"],
         git_sha="deadbeef",
     )
     assert manifest is not None

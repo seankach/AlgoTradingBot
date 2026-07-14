@@ -38,7 +38,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     label_store = LabelStore(config.storage)
     generator = TripleBarrier(
         k=config.labels.barrier_sigma_multiple_k,
-        h_minutes=config.labels.vertical_barrier_bars_h,
+        h_bars=config.labels.vertical_barrier_bars_h,
     )
     vol = config.labels.volatility
 

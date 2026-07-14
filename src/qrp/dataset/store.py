@@ -91,6 +91,7 @@ def build_and_store(
     store: DatasetStore,
     *,
     symbol: str,
+    bar_spec_version: str,
     feature_spec_version: str,
     label_spec_version: str,
     cost_model_version: str,
@@ -109,6 +110,7 @@ def build_and_store(
 
     dataset_id = compute_dataset_id(
         raw_snapshot_ids=raw_snapshot_ids,
+        bar_spec_version=bar_spec_version,
         feature_spec_version=feature_spec_version,
         label_spec_version=label_spec_version,
         cost_model_version=cost_model_version,
@@ -120,6 +122,7 @@ def build_and_store(
         symbol=symbol,
         built_at_utc=datetime.now(UTC),
         git_sha=git_sha,
+        bar_spec_version=bar_spec_version,
         feature_spec_version=feature_spec_version,
         label_spec_version=label_spec_version,
         cost_model_version=cost_model_version,

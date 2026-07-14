@@ -31,9 +31,12 @@ def barrier_volatility(
         timezone: Exchange timezone for the trading-date and time-of-day bucketing.
 
     Returns:
-        One row per input ``ts_utc``; ``sigma`` is null until a bucket has at least one prior
-        day of history.
+        One row per **traded** input ``ts_utc``; ``sigma`` is null until a bucket has at least
+        one prior day of history. Computed over the traded series so it is identical whether
+        called from the feature build or the labeller (I3, ADR-0008).
     """
+    if "is_traded" in bars.columns:
+        bars = bars.filter(pl.col("is_traded"))
     et = pl.col("ts_utc").dt.convert_time_zone(timezone)
     minute_of_day = et.dt.hour().cast(pl.Int32) * 60 + et.dt.minute().cast(pl.Int32)
     tagged = bars.sort("ts_utc").with_columns(

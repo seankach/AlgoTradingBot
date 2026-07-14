@@ -1,10 +1,11 @@
 """Feature composition, the point-in-time lag, and the feature lake (ADR-0006).
 
-``build_features`` runs each generator (which computes *through* bar t), then applies the
-**single mandatory 1-bar lag** so every stored market feature at t reflects only bars
-``<= t - 1min`` (I1, ADR-0004). Deterministic (calendar) features are exempt. The feature
-lake is derived (regenerable, like validated bars — I2 governs raw only) and stamps
-``feature_spec_version`` for the ``dataset_id`` hash (ADR-0003).
+``build_features`` runs each generator (which computes *through* bar t) over the **traded**
+series, then applies the **single mandatory 1-bar lag** so every stored market feature at t
+reflects only bars ``<=`` the previous *traded* bar (I1, ADR-0004/0008). Deterministic
+(calendar) features are exempt. The feature lake is derived (regenerable, like validated bars
+— I2 governs raw only) and stamps ``feature_spec_version`` for the ``dataset_id`` hash
+(ADR-0003).
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from qrp.features.protocols import FeatureGenerator
 from qrp.observability.logging import get_logger
 
 _log = get_logger(__name__)
-_LAG_MIN = 1  # single mandatory point-in-time lag: row t reflects bars <= t-1min (ADR-0006)
+_LAG_BARS = 1  # single mandatory point-in-time lag: row t reflects bars <= previous traded bar
 _PARQUET_NAME = "features.parquet"
 _MANIFEST_NAME = "_build.json"
 _KEEP = ("ts_utc", "session", "is_traded")
@@ -56,14 +57,14 @@ def default_generators(
     the barrier share one estimator (I3).
     """
     return [
-        LaggedReturns(horizons_min=tuple(features.return_horizons_min)),
+        LaggedReturns(horizons_bars=tuple(features.return_horizons_bars)),
         BarrierVolatility(
             bucket_minutes=volatility.bucket_minutes,
             ewma_span_days=volatility.ewma_span_days,
             timezone=timezone,
         ),
-        RangeVolatility(window_min=features.range_vol_window_min),
-        RelativeVolume(window_min=features.relative_volume_window_min),
+        RangeVolatility(window_bars=features.range_vol_window_bars),
+        RelativeVolume(window_bars=features.relative_volume_window_bars),
         TimeOfDay(timezone=timezone),
     ]
 
@@ -82,9 +83,19 @@ def build_features(
     if validated.is_empty():
         return pl.DataFrame()
 
-    frame = validated.sort("ts_utc").with_columns(
-        pl.col("ts_utc").dt.convert_time_zone(timezone).dt.date().alias(_SESSION_DATE)
+    # Event-based (ADR-0008): compute and lag over the TRADED series so "previous bar" means
+    # the previous traded *event*, never a padded-grid minute. Decisions/labels only exist on
+    # traded bars, so nothing is lost.
+    frame = (
+        validated.filter(pl.col("is_traded"))
+        .sort("ts_utc")
+        .with_columns(
+            pl.col("ts_utc").dt.convert_time_zone(timezone).dt.date().alias(_SESSION_DATE)
+        )
     )
+    if frame.is_empty():
+        return pl.DataFrame()
+
     result = frame.select(*_KEEP, _SESSION_DATE)
     market_columns: list[str] = []
     for generator in generators:
@@ -93,8 +104,9 @@ def build_features(
             market_columns.extend(generator.output_columns)
 
     if market_columns:
+        # Single mandatory point-in-time lag: row t reflects only bars <= previous traded bar.
         result = result.with_columns(
-            pl.col(column).shift(_LAG_MIN).over(_SESSION_DATE).alias(column)
+            pl.col(column).shift(_LAG_BARS).over(_SESSION_DATE).alias(column)
             for column in market_columns
         )
     return result.drop(_SESSION_DATE).sort("ts_utc")

@@ -14,6 +14,7 @@ from qrp.config.models import (
     StoragePathsConfig,
     VolatilityEstimatorConfig,
 )
+from qrp.features.generators import _SESSION_DATE
 from qrp.features.protocols import FeatureGenerator
 from qrp.features.store import FeatureStore, build_and_store, build_features, default_generators
 
@@ -23,9 +24,9 @@ _TZ = "America/New_York"
 def _generators() -> list[FeatureGenerator]:
     spec = FeatureSpecConfig(
         version="t",
-        return_horizons_min=[1, 5, 15, 30],
-        range_vol_window_min=30,
-        relative_volume_window_min=60,
+        return_horizons_bars=[1, 5, 15, 30],
+        range_vol_window_bars=30,
+        relative_volume_window_bars=60,
     )
     vol = VolatilityEstimatorConfig(method="time_of_day_ewma", bucket_minutes=30, ewma_span_days=20)
     return default_generators(spec, vol, timezone=_TZ)
@@ -62,11 +63,31 @@ def test_no_future_leak_last_bar_changes_nothing() -> None:
 def test_returns_are_lagged_by_one_bar() -> None:
     frame = _validated([10.0, 20.0, 40.0, 80.0, 160.0, 320.0])
     out = build_features(frame, _generators(), timezone=_TZ).sort("ts_utc")
-    ret1 = out.get_column("ret_1m").to_list()
-    # through-t ret_1m(t)=ln(c_t/c_{t-1}); after the 1-bar lag, stored(t)=through(t-1).
+    ret1 = out.get_column("ret_1b").to_list()
+    # through-t ret_1b(t)=ln(c_t/c_{t-1}); after the 1-bar lag, stored(t)=through(t-1).
     assert ret1[0] is None
     assert ret1[1] is None
     assert ret1[2] == pytest.approx(math.log(2.0))  # ln(c1/c0) = ln 2
+
+
+def test_close_feature_never_leaks_current_bar() -> None:
+    # The §7 point-in-time arbiter: a feature equal to close_t, run through the store, must
+    # on every decision bar equal the PREVIOUS traded close, never the current one (I1).
+    closes = [10.0, 11.0, 13.0, 16.0, 20.0, 25.0]
+    validated = _validated(closes).with_columns(pl.col("close").alias("raw_close"))
+
+    frame = validated.filter(pl.col("is_traded")).with_columns(
+        pl.col("ts_utc").dt.convert_time_zone(_TZ).dt.date().alias(_SESSION_DATE)
+    )
+    lagged = frame.select("ts_utc", "raw_close", _SESSION_DATE).with_columns(
+        pl.col("raw_close").shift(1).over(_SESSION_DATE).alias("close_feature")
+    )
+    got = lagged.get_column("close_feature").to_list()
+    # Row t must carry close_{t-1}, never close_t.
+    assert got[0] is None
+    for t in range(1, len(closes)):
+        assert got[t] == closes[t - 1]
+        assert got[t] != closes[t]
 
 
 def test_deterministic_features_are_not_lagged() -> None:
@@ -80,10 +101,10 @@ def test_deterministic_features_are_not_lagged() -> None:
 def test_expected_feature_columns_present() -> None:
     out = build_features(_validated([10.0 + i for i in range(40)]), _generators(), timezone=_TZ)
     for column in (
-        "ret_1m",
-        "ret_5m",
-        "ret_15m",
-        "ret_30m",
+        "ret_1b",
+        "ret_5b",
+        "ret_15b",
+        "ret_30b",
         "ewma_vol",
         "range_vol",
         "rel_volume",

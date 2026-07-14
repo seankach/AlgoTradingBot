@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime, timedelta
 
 import polars as pl
+import pytest
 
 from qrp.features.volatility import barrier_volatility
 
@@ -53,3 +55,20 @@ def test_open_and_midday_buckets_have_separate_sigma() -> None:
     open_sigma = joined.filter(pl.col("ts_utc") < day2 + timedelta(minutes=30))["sigma"][0]
     midday_sigma = joined.filter(pl.col("ts_utc") >= day2 + timedelta(minutes=30))["sigma"][0]
     assert midday_sigma > open_sigma  # the volatile bucket carries a higher estimate
+
+
+def test_sigma_equals_prior_day_bucket_realized_vol_hand_computed() -> None:
+    # With one prior day, the bucket EWMA is exactly that day's realized vol (shift(1) uses
+    # strictly prior days). Day 1 has a constant 1-min log return r, so RV = r^2 and
+    # sigma(day2) = sqrt(r^2) = |r|. This pins the shift/ewm ordering (ADR-0008 review item).
+    r = 0.01
+    n = 10  # all within the 10:00-10:29 ET bucket
+    day1 = datetime(2024, 1, 2, 15, 0, tzinfo=UTC)
+    day2 = datetime(2024, 1, 3, 15, 0, tzinfo=UTC)
+    closes1 = [100.0 * math.exp(r * i) for i in range(n)]
+    closes2 = [50.0 * math.exp(r * i) for i in range(n)]  # day-2 prices don't affect day-2 sigma
+    bars = pl.concat([_rth_day(day1, closes1), _rth_day(day2, closes2)])
+
+    vol = barrier_volatility(bars, bucket_minutes=30, ewma_span_days=20, timezone=_TZ)
+    day2_sigma = bars.join(vol, on="ts_utc").filter(pl.col("ts_utc") >= day2)["sigma"][0]
+    assert day2_sigma == pytest.approx(abs(r), rel=1e-9)

@@ -20,6 +20,9 @@ from qrp.observability.logging import configure_logging, get_logger
 from qrp.validation.lake import ValidatedBarStore
 
 _log = get_logger(__name__)
+# The active sampler: 1-minute IBKR TRADES bars. Bumped when a new sampler (e.g. dollar
+# bars) lands, so datasets on different samplers get distinct ids (ADR-0008).
+_BAR_SPEC_VERSION = "1min-trades-v1"
 
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
@@ -27,6 +30,11 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         prog="qrp.dataset", description="Assemble the research dataset."
     )
     parser.add_argument("--config", default="config", help="Path to the config directory.")
+    parser.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="Build even if the git tree is dirty (the id will be unreproducible).",
+    )
     return parser.parse_args(argv)
 
 
@@ -36,11 +44,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     config = load_config(args.config)
     configure_logging(config.logging)
 
+    git_sha = git_head_sha()
+    if git_sha.endswith("-dirty") and not args.allow_dirty:
+        # A dirty tree cannot be reproduced from its git sha (I6). Refuse unless overridden.
+        _log.error("dataset.cli.dirty_tree", git_sha=git_sha)
+        return 1
+
     validated_store = ValidatedBarStore(config.storage)
     feature_store = FeatureStore(config.storage)
     label_store = LabelStore(config.storage)
     dataset_store = DatasetStore(config.storage)
-    git_sha = git_head_sha()
 
     built = 0
     for spec in config.universe.symbols:
@@ -57,6 +70,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             label_store.read(symbol),
             dataset_store,
             symbol=symbol,
+            bar_spec_version=_BAR_SPEC_VERSION,
             feature_spec_version=feature_manifest.feature_spec_version,
             label_spec_version=label_manifest.label_spec_version,
             cost_model_version=config.costs.version,
