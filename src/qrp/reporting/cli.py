@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 
 import polars as pl
 
@@ -29,6 +30,12 @@ from qrp.validation.sessions import SessionTagger
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="qrp.reporting", description="Print ingestion evidence.")
     parser.add_argument("--config", default="config", help="Path to the config directory.")
+    parser.add_argument(
+        "--recent-years",
+        type=float,
+        default=3.0,
+        help="Also show a spread cut over the last N years (0 to disable). Default: 3.",
+    )
     return parser.parse_args(argv)
 
 
@@ -44,6 +51,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     store = SnapshotStore(config.storage)
     tagger = SessionTagger()
     scope = [str(session) for session in config.session.ingest_sessions]
+
+    since: datetime | None = None
+    recent_label = "recent"
+    if args.recent_years > 0:
+        since = datetime.now(UTC) - timedelta(days=round(365.25 * args.recent_years))
+        recent_label = f"last {args.recent_years:g}y (since {since.date().isoformat()})"
 
     for spec in config.universe.symbols:
         trades = assemble_validated(
@@ -69,6 +82,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             spread_stats=(
                 bid_ask if bid_ask.is_empty() else spread_distribution_by_session(bid_ask)
             ),
+            recent_spread_stats=(
+                None
+                if bid_ask.is_empty() or since is None
+                else spread_distribution_by_session(bid_ask, since=since)
+            ),
+            recent_label=recent_label,
         )
         print(report)  # stdout is the product of this report CLI
 

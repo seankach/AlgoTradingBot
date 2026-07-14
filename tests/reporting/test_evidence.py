@@ -73,6 +73,30 @@ def test_spread_columns_and_distribution() -> None:
     assert stats.filter(pl.col("session") == "RTH")["n"].to_list() == [1]
 
 
+def test_spread_distribution_since_filters_by_date() -> None:
+    frame = pl.DataFrame(
+        {
+            "ts_utc": [
+                datetime(2019, 1, 2, 15, 0, tzinfo=UTC),
+                datetime(2025, 1, 2, 15, 0, tzinfo=UTC),
+            ],
+            "session": ["RTH", "RTH"],
+            "is_traded": [True, True],
+            "open": [100.0, 100.0],
+            "high": [100.6, 100.6],
+            "low": [99.9, 99.9],
+            "close": [100.2, 100.2],
+            "volume": [10.0, 10.0],
+            "bar_count": [1, 1],
+            "wap": [100.1, 100.1],
+        }
+    )
+    full = spread_distribution_by_session(frame)
+    recent = spread_distribution_by_session(frame, since=datetime(2024, 1, 1, tzinfo=UTC))
+    assert full.filter(pl.col("session") == "RTH")["n"].to_list() == [2]
+    assert recent.filter(pl.col("session") == "RTH")["n"].to_list() == [1]
+
+
 def _bars(start: datetime, n: int, close: float) -> list[Bar]:
     return [
         Bar(

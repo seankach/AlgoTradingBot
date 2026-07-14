@@ -53,20 +53,25 @@ def row_counts_by_session(frame: pl.DataFrame) -> dict[str, int]:
     return {session: mapping.get(session, 0) for session in _SESSION_ORDER if session in mapping}
 
 
-def spread_distribution_by_session(bid_ask_frame: pl.DataFrame) -> pl.DataFrame:
+def spread_distribution_by_session(
+    bid_ask_frame: pl.DataFrame, *, since: datetime | None = None
+) -> pl.DataFrame:
     """Return spread-in-bps distribution statistics per session.
 
     Columns: ``session, n, mean_bps, median_bps, p25_bps, p75_bps, p95_bps``.
 
     Anomalous bars (flagged by the validator: non-positive prices, ``high < low``, extreme
     returns) and crossed quotes (``ask < bid``) are excluded so IPO-era auction junk does
-    not distort the distribution.
+    not distort the distribution. If ``since`` is given, only bars with ``ts_utc >= since``
+    are included (a recent-regime cut).
     """
     frame = add_spread_columns(bid_ask_frame).filter(
         pl.col("spread_bps").is_not_null() & (pl.col("spread_bps") >= 0)
     )
     if "is_price_anomaly" in frame.columns:
         frame = frame.filter(~pl.col("is_price_anomaly"))
+    if since is not None:
+        frame = frame.filter(pl.col("ts_utc") >= since)
     stats = frame.group_by("session").agg(
         pl.len().alias("n"),
         pl.col("spread_bps").mean().alias("mean_bps"),
@@ -87,6 +92,8 @@ def render_evidence(
     trades_counts: dict[str, int],
     bid_ask_counts: dict[str, int],
     spread_stats: pl.DataFrame,
+    recent_spread_stats: pl.DataFrame | None = None,
+    recent_label: str = "recent",
 ) -> str:
     """Render the evidence deliverables as a human-readable text block."""
     lines = [
@@ -101,6 +108,9 @@ def render_evidence(
     lines += [f"  {session:<9} {count:>12,}" for session, count in trades_counts.items()]
     lines += ["", "Traded row counts by session (BID_ASK):"]
     lines += [f"  {session:<9} {count:>12,}" for session, count in bid_ask_counts.items()]
-    lines += ["", "Spread distribution by session (bps), from BID_ASK (OQ-5):"]
+    lines += ["", "Spread distribution by session (bps) — full history, from BID_ASK (OQ-5):"]
     lines.append(str(spread_stats))
+    if recent_spread_stats is not None:
+        lines += ["", f"Spread distribution by session (bps) — {recent_label}:"]
+        lines.append(str(recent_spread_stats))
     return "\n".join(lines)
