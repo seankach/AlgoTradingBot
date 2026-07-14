@@ -179,6 +179,29 @@ class LabelSpecConfig(_Strict):
     volatility: VolatilityEstimatorConfig
 
 
+class FeatureSpecConfig(_Strict):
+    """Versioned feature specification (ADR-0006). ``version`` feeds the ``dataset_id`` hash.
+
+    The session-conditional EWMA volatility feature reuses ``LabelSpecConfig.volatility`` so
+    features and the barrier that defines the strategy share one estimator (I3). Windows are
+    frozen here; nothing is tuned.
+    """
+
+    version: str = Field(..., min_length=1)
+    return_horizons_min: list[int] = Field(..., min_length=1)
+    range_vol_window_min: int = Field(..., gt=1)
+    relative_volume_window_min: int = Field(..., gt=1)
+
+    @field_validator("return_horizons_min")
+    @classmethod
+    def _positive_unique_horizons(cls, value: list[int]) -> list[int]:
+        if any(h <= 0 for h in value):
+            raise ValueError("return horizons must be positive minutes")
+        if len(set(value)) != len(value):
+            raise ValueError("duplicate return horizons")
+        return value
+
+
 class StoragePathsConfig(_Strict):
     """Filesystem layout of the Parquet lake and registry artifacts.
 
@@ -189,6 +212,7 @@ class StoragePathsConfig(_Strict):
     data_root: Path
     raw_snapshots_subdir: str = "raw_snapshots"
     validated_bars_subdir: str = "validated_bars"
+    features_subdir: str = "features"
     manifests_subdir: str = "manifests"
     duckdb_subpath: str = "catalog/qrp.duckdb"
 
@@ -201,6 +225,11 @@ class StoragePathsConfig(_Strict):
     def validated_bars_dir(self) -> Path:
         """Root of the validated, session-tagged bar lake."""
         return self.data_root / self.validated_bars_subdir
+
+    @property
+    def features_dir(self) -> Path:
+        """Root of the point-in-time feature lake (ADR-0006)."""
+        return self.data_root / self.features_subdir
 
     @property
     def manifests_dir(self) -> Path:
@@ -240,5 +269,6 @@ class AppConfig(_Strict):
     session: SessionScopeConfig
     costs: CostModelConfig
     labels: LabelSpecConfig
+    features: FeatureSpecConfig
     storage: StoragePathsConfig
     logging: LoggingConfig

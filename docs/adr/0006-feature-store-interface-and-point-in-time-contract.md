@@ -1,8 +1,8 @@
 # ADR-0006: Feature store — interface, point-in-time contract, and initial feature spec
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-14
-- **Deciders:** (awaiting approval)
+- **Deciders:** Romesh Sharma (approved 2026-07-14)
 - **Charter refs:** §4 (feature store), §6 (features feed labels), §7 (leakage tests),
   §2 invariants I1 (no look-ahead), I6 (reproducibility); builds on ADR-0004 (timestamp
   semantics), ADR-0001/0003 (storage, dataset_id)

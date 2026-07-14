@@ -28,6 +28,7 @@ _SECTION_FILES: Final[dict[str, str]] = {
     "session": "session.yaml",
     "costs": "costs.yaml",
     "labels": "labels.yaml",
+    "features": "features.yaml",
     "storage": "storage.yaml",
     "logging": "logging.yaml",
 }

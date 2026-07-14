@@ -1,0 +1,8 @@
+# Feature specification (ADR-0006). Versioned; feeds the dataset_id hash.
+# Deliberately minimal + causal first set. The session-conditional EWMA volatility feature
+# reuses labels.volatility (features and the barrier share one estimator, I3).
+# Windows are frozen; nothing is tuned.
+version: "2026.07.14"
+return_horizons_min: [1, 5, 15, 30]   # lagged log-return horizons
+range_vol_window_min: 30              # Parkinson/Garman-Klass window
+relative_volume_window_min: 60        # trailing window for volume z-score

@@ -53,6 +53,12 @@ VALID_CONFIG: dict[str, dict[str, Any]] = {
             "session_conditional": True,
         },
     },
+    "features": {
+        "version": "test-1",
+        "return_horizons_min": [1, 5, 15, 30],
+        "range_vol_window_min": 30,
+        "relative_volume_window_min": 60,
+    },
     "storage": {"data_root": "./data"},
     "logging": {"level": "INFO", "renderer": "json"},
 }
