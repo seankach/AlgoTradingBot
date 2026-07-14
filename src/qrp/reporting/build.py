@@ -19,6 +19,10 @@ from qrp.validation.quality import flag_quality
 from qrp.validation.session_index import attach_bars, build_session_index
 from qrp.validation.sessions import SessionTagger
 
+# Bars within this window of the latest fetch may still be settling (late prints, the
+# incomplete last bar) and are excluded from re-adjustment detection (ADR-0005).
+_SETTLING_HORIZON = timedelta(days=3)
+
 
 def load_series_frames(
     store: SnapshotStore, symbol: str, what_to_show: WhatToShow
@@ -47,9 +51,19 @@ def assemble_validated(
     frames = load_series_frames(store, symbol, what_to_show)
     if not frames:
         return pl.DataFrame()
-    assert_no_conflicts(frames)
 
-    combined = pl.concat(frames).unique(subset="ts_utc", keep="first").sort("ts_utc")
+    combined_all = pl.concat(frames)
+    max_fetch = combined_all.get_column("fetch_ts_utc").max()
+    settled_before = max_fetch - _SETTLING_HORIZON if isinstance(max_fetch, datetime) else None
+    # A genuine retroactive re-adjustment rewrites old, settled bars -> raise. Recent bars
+    # still settling at the frontier are resolved below by keeping the latest fetch.
+    assert_no_conflicts(frames, settled_before=settled_before)
+
+    combined = (
+        combined_all.sort("ts_utc", "fetch_ts_utc")
+        .unique(subset="ts_utc", keep="last")
+        .sort("ts_utc")
+    )
     start = combined.get_column("ts_utc").min()
     end = combined.get_column("ts_utc").max()
     assert isinstance(start, datetime)

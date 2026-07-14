@@ -8,7 +8,10 @@ spread distribution by session.
 from __future__ import annotations
 
 import argparse
+import sys
 from collections.abc import Sequence
+
+import polars as pl
 
 from qrp.config import load_config
 from qrp.domain.enums import WhatToShow
@@ -32,6 +35,11 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None) -> int:
     """Render the evidence report for every configured symbol."""
     args = _parse_args(argv)
+    # Windows consoles default to cp1252; keep the report printable everywhere.
+    pl.Config.set_ascii_tables(active=True)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+
     config = load_config(args.config)
     store = SnapshotStore(config.storage)
     tagger = SessionTagger()

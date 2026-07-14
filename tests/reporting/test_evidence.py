@@ -109,3 +109,37 @@ def test_assemble_validated_from_lake(tmp_path: Path) -> None:
     )
     assert frame.filter(pl.col("is_traded")).height == 5
     assert row_counts_by_session(frame) == {"RTH": 5}
+
+
+def test_assemble_resolves_frontier_settling_by_latest_fetch(tmp_path: Path) -> None:
+    store = SnapshotStore(StoragePathsConfig(data_root=tmp_path))
+    ts = datetime(2026, 7, 14, 15, 0, tzinfo=UTC)  # a recent RTH minute
+    # Two snapshots of the same bar with different close values (a still-settling frontier
+    # bar re-fetched), each tagged with a different fetch time.
+    store.write_snapshot(
+        symbol="TSLA",
+        what_to_show=WhatToShow.TRADES,
+        bars=_bars(ts, 1, close=1.5),
+        request_timezone="America/New_York",
+        bar_size="1 min",
+        fetch_ts_utc=datetime(2026, 7, 14, 16, 0, tzinfo=UTC),
+    )
+    store.write_snapshot(
+        symbol="TSLA",
+        what_to_show=WhatToShow.TRADES,
+        bars=_bars(ts, 1, close=1.9),  # corrected value, later fetch
+        request_timezone="America/New_York",
+        bar_size="1 min",
+        fetch_ts_utc=datetime(2026, 7, 14, 17, 0, tzinfo=UTC),
+    )
+    # Must not raise (frontier settling, not re-adjustment) and must keep the latest fetch.
+    frame = assemble_validated(
+        store,
+        SessionTagger(),
+        symbol="TSLA",
+        what_to_show=WhatToShow.TRADES,
+        sessions_included=["RTH"],
+    )
+    traded = frame.filter(pl.col("is_traded"))
+    assert traded.height == 1
+    assert traded.get_column("close").to_list() == [1.9]

@@ -56,6 +56,22 @@ class TestConflicts:
         b = _value_frame([datetime(2024, 1, 2, 14, 31, tzinfo=UTC)], [9.9])
         assert find_conflicts([a, b]).height == 0
 
+    def test_settled_before_excludes_frontier_but_keeps_old(self) -> None:
+        old_ts = datetime(2020, 1, 2, 15, 0, tzinfo=UTC)
+        new_ts = datetime(2026, 7, 14, 8, 0, tzinfo=UTC)
+        a = _value_frame([old_ts, new_ts], [1.5, 2.0])
+        b = _value_frame([old_ts, new_ts], [1.5, 9.9])  # disagree only at the recent bar
+        horizon = datetime(2026, 7, 1, tzinfo=UTC)
+
+        assert find_conflicts([a, b]).height == 1  # unfiltered: frontier conflict shows
+        assert find_conflicts([a, b], settled_before=horizon).height == 0  # tolerated
+
+        # A genuine old (settled) re-adjustment is still caught.
+        c = _value_frame([old_ts], [1.5])
+        d = _value_frame([old_ts], [0.3])
+        with pytest.raises(SnapshotConflictError):
+            assert_no_conflicts([c, d], settled_before=horizon)
+
 
 class TestSessionTagging:
     def test_tags_each_session(self) -> None:

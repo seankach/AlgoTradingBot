@@ -57,8 +57,16 @@ def spread_distribution_by_session(bid_ask_frame: pl.DataFrame) -> pl.DataFrame:
     """Return spread-in-bps distribution statistics per session.
 
     Columns: ``session, n, mean_bps, median_bps, p25_bps, p75_bps, p95_bps``.
+
+    Anomalous bars (flagged by the validator: non-positive prices, ``high < low``, extreme
+    returns) and crossed quotes (``ask < bid``) are excluded so IPO-era auction junk does
+    not distort the distribution.
     """
-    frame = add_spread_columns(bid_ask_frame).filter(pl.col("spread_bps").is_not_null())
+    frame = add_spread_columns(bid_ask_frame).filter(
+        pl.col("spread_bps").is_not_null() & (pl.col("spread_bps") >= 0)
+    )
+    if "is_price_anomaly" in frame.columns:
+        frame = frame.filter(~pl.col("is_price_anomaly"))
     stats = frame.group_by("session").agg(
         pl.len().alias("n"),
         pl.col("spread_bps").mean().alias("mean_bps"),
