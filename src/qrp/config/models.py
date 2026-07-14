@@ -219,6 +219,7 @@ class StoragePathsConfig(_Strict):
     validated_bars_subdir: str = "validated_bars"
     features_subdir: str = "features"
     labels_subdir: str = "labels"
+    datasets_subdir: str = "datasets"
     manifests_subdir: str = "manifests"
     duckdb_subpath: str = "catalog/qrp.duckdb"
 
@@ -241,6 +242,11 @@ class StoragePathsConfig(_Strict):
     def labels_dir(self) -> Path:
         """Root of the derived label lake (ADR-0007)."""
         return self.data_root / self.labels_subdir
+
+    @property
+    def datasets_dir(self) -> Path:
+        """Root of the manifest-addressed research datasets (ADR-0003)."""
+        return self.data_root / self.datasets_subdir
 
     @property
     def manifests_dir(self) -> Path:
