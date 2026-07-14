@@ -6,10 +6,10 @@ calendar features are exempt from the lag.
 """
 
 from qrp.features.generators import (
+    BarrierVolatility,
     LaggedReturns,
     RangeVolatility,
     RelativeVolume,
-    SessionConditionalEwmaVol,
     TimeOfDay,
 )
 from qrp.features.protocols import FeatureGenerator
@@ -20,16 +20,18 @@ from qrp.features.store import (
     build_features,
     default_generators,
 )
+from qrp.features.volatility import barrier_volatility
 
 __all__ = [
+    "BarrierVolatility",
     "FeatureBuildManifest",
     "FeatureGenerator",
     "FeatureStore",
     "LaggedReturns",
     "RangeVolatility",
     "RelativeVolume",
-    "SessionConditionalEwmaVol",
     "TimeOfDay",
+    "barrier_volatility",
     "build_and_store",
     "build_features",
     "default_generators",

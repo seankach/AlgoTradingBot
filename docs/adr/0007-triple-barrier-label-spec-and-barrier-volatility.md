@@ -1,8 +1,8 @@
 # ADR-0007: Triple-barrier label spec, exit-policy unity, and barrier volatility
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-14
-- **Deciders:** (awaiting approval)
+- **Deciders:** Romesh Sharma (approved 2026-07-14; barrier vol = option B, 30-min buckets)
 - **Charter refs:** §6 (label & strategy contract), §7 (validation), §2 invariants I3
   (label = exit policy), I1; builds on ADR-0006 (shared vol estimator), ADR-0004
 
@@ -92,5 +92,6 @@ label lake (`labels/`, partitioned `symbol/date`) with a manifest stamping
 - Commits Module 3 to: the `LabelGenerator` protocol, the label schema, the label lake, and
   the σ definition. The purge/embargo derivation and sample-uniqueness weighting (Module 5)
   consume the label lifespans. Changing any of these needs a new ADR (§3).
-- **Open question for your call:** bucket granularity for (B) — 15 vs 30 min — and whether to
-  adopt hybrid (C) now instead of deferring it. Both are called out in the questions below.
+
+**Resolved (2026-07-14):** option **B** with **30-minute** buckets; hybrid (C) is deferred to
+a future label-spec version.

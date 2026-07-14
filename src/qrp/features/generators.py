@@ -12,18 +12,14 @@ from dataclasses import dataclass
 
 import polars as pl
 
+from qrp.features.volatility import barrier_volatility
+
 _SESSION_DATE = "_session_date"
 
 
 def _log_close() -> pl.Expr:
     """Natural log of a strictly-positive close, else null (avoids -inf/nan)."""
     return pl.when(pl.col("close") > 0).then(pl.col("close").log()).otherwise(None)
-
-
-def _one_minute_log_return() -> pl.Expr:
-    """1-minute log return within a session date (null at the day's first minute / gaps)."""
-    log_close = _log_close()
-    return (log_close - log_close.shift(1)).over(_SESSION_DATE)
 
 
 @dataclass(frozen=True)
@@ -50,17 +46,16 @@ class LaggedReturns:
 
 
 @dataclass(frozen=True)
-class SessionConditionalEwmaVol:
-    """Causal EWMA of 1-min squared returns; session-conditional (§6).
+class BarrierVolatility:
+    """Time-of-day-bucketed causal EWMA volatility (ADR-0007; §6).
 
-    When ``session_conditional`` is true the EWMA resets per ``(session_date, session)`` so
-    the open-hour spike does not bleed into midday across sessions. (Finer intraday
-    conditioning within RTH is a candidate refinement for the label-spec ADR, since the
-    barrier volatility defines the strategy — I3.)
+    Thin feature wrapper over :func:`qrp.features.volatility.barrier_volatility`, so the
+    ``ewma_vol`` feature and the triple-barrier's sigma are computed by one estimator (I3).
     """
 
-    span_bars: int
-    session_conditional: bool
+    bucket_minutes: int
+    ewma_span_days: int
+    timezone: str
     name: str = "ewma_vol"
     is_deterministic: bool = False
 
@@ -70,14 +65,14 @@ class SessionConditionalEwmaVol:
         return ("ewma_vol",)
 
     def generate(self, bars: pl.DataFrame) -> pl.DataFrame:
-        """Compute the (session-conditional) EWMA volatility of 1-min returns."""
-        group = [_SESSION_DATE, "session"] if self.session_conditional else [_SESSION_DATE]
-        variance = (
-            (_one_minute_log_return() ** 2)
-            .ewm_mean(span=self.span_bars, ignore_nulls=True)
-            .over(group)
+        """Compute the shared time-of-day-bucketed barrier volatility."""
+        vol = barrier_volatility(
+            bars,
+            bucket_minutes=self.bucket_minutes,
+            ewma_span_days=self.ewma_span_days,
+            timezone=self.timezone,
         )
-        return bars.select("ts_utc", variance.sqrt().alias("ewma_vol"))
+        return vol.rename({"sigma": "ewma_vol"})
 
 
 @dataclass(frozen=True)

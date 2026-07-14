@@ -158,11 +158,16 @@ class CostModelConfig(_Strict):
 
 
 class VolatilityEstimatorConfig(_Strict):
-    """Causal, session-conditional volatility estimator for the barriers (CLAUDE.md §6)."""
+    """Causal, time-of-day-bucketed EWMA volatility for the barriers (ADR-0007; §6).
 
-    method: Literal["ewma"]
-    window_bars: int = Field(..., gt=1)
-    session_conditional: bool
+    For a bar, sigma is the EWMA (over **past days**) of the realized variance of the same
+    intraday bucket, so open-hour and midday have separate estimators (§6). Shared by the
+    barrier and the ``ewma_vol`` feature (I3).
+    """
+
+    method: Literal["time_of_day_ewma"]
+    bucket_minutes: int = Field(..., gt=0)
+    ewma_span_days: int = Field(..., gt=1)
 
 
 class LabelSpecConfig(_Strict):

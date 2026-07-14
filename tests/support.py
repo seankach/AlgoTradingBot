@@ -48,9 +48,9 @@ VALID_CONFIG: dict[str, dict[str, Any]] = {
         "barrier_sigma_multiple_k": 2.0,
         "vertical_barrier_bars_h": 30,
         "volatility": {
-            "method": "ewma",
-            "window_bars": 60,
-            "session_conditional": True,
+            "method": "time_of_day_ewma",
+            "bucket_minutes": 30,
+            "ewma_span_days": 20,
         },
     },
     "features": {

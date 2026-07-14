@@ -31,4 +31,4 @@ approval**. Do not build on an unapproved decision. Once approved, set the statu
 | [0004](0004-bar-timestamp-semantics-and-point-in-time-correctness.md) | Bar timestamp semantics and the point-in-time rule | Accepted |
 | [0005](0005-frontier-settling-vs-retroactive-readjustment.md) | Frontier settling vs. retroactive re-adjustment in conflict detection | Accepted |
 | [0006](0006-feature-store-interface-and-point-in-time-contract.md) | Feature store: interface, point-in-time contract, initial feature spec | Accepted |
-| [0007](0007-triple-barrier-label-spec-and-barrier-volatility.md) | Triple-barrier label spec, exit-policy unity, and barrier volatility | Proposed |
+| [0007](0007-triple-barrier-label-spec-and-barrier-volatility.md) | Triple-barrier label spec, exit-policy unity, and barrier volatility | Accepted |

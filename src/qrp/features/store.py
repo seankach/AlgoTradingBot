@@ -18,10 +18,10 @@ from qrp.base import StrictModel
 from qrp.config.models import FeatureSpecConfig, StoragePathsConfig, VolatilityEstimatorConfig
 from qrp.features.generators import (
     _SESSION_DATE,
+    BarrierVolatility,
     LaggedReturns,
     RangeVolatility,
     RelativeVolume,
-    SessionConditionalEwmaVol,
     TimeOfDay,
 )
 from qrp.features.protocols import FeatureGenerator
@@ -57,9 +57,10 @@ def default_generators(
     """
     return [
         LaggedReturns(horizons_min=tuple(features.return_horizons_min)),
-        SessionConditionalEwmaVol(
-            span_bars=volatility.window_bars,
-            session_conditional=volatility.session_conditional,
+        BarrierVolatility(
+            bucket_minutes=volatility.bucket_minutes,
+            ewma_span_days=volatility.ewma_span_days,
+            timezone=timezone,
         ),
         RangeVolatility(window_min=features.range_vol_window_min),
         RelativeVolume(window_min=features.relative_volume_window_min),

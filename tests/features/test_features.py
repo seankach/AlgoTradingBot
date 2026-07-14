@@ -27,7 +27,7 @@ def _generators() -> list[FeatureGenerator]:
         range_vol_window_min=30,
         relative_volume_window_min=60,
     )
-    vol = VolatilityEstimatorConfig(method="ewma", window_bars=60, session_conditional=True)
+    vol = VolatilityEstimatorConfig(method="time_of_day_ewma", bucket_minutes=30, ewma_span_days=20)
     return default_generators(spec, vol, timezone=_TZ)
 
 
