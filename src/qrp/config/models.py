@@ -218,6 +218,7 @@ class StoragePathsConfig(_Strict):
     raw_snapshots_subdir: str = "raw_snapshots"
     validated_bars_subdir: str = "validated_bars"
     features_subdir: str = "features"
+    labels_subdir: str = "labels"
     manifests_subdir: str = "manifests"
     duckdb_subpath: str = "catalog/qrp.duckdb"
 
@@ -235,6 +236,11 @@ class StoragePathsConfig(_Strict):
     def features_dir(self) -> Path:
         """Root of the point-in-time feature lake (ADR-0006)."""
         return self.data_root / self.features_subdir
+
+    @property
+    def labels_dir(self) -> Path:
+        """Root of the derived label lake (ADR-0007)."""
+        return self.data_root / self.labels_subdir
 
     @property
     def manifests_dir(self) -> Path:
