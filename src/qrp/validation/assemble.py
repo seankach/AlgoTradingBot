@@ -1,8 +1,12 @@
-"""Assemble validated frames from the snapshot lake for reporting.
+"""Assemble a validated bar frame from the immutable snapshot lake.
 
-Reads every snapshot for a symbol/series, checks cross-snapshot consistency (raising on a
-retroactive re-adjustment, §5), unions the bars, and runs the validation pipeline (session
-tagging, complete index, quality flags).
+Reads every snapshot for a symbol/series, checks cross-snapshot consistency on **settled**
+history (raising on retroactive re-adjustment; recent frontier bars are resolved by keeping
+the latest fetch, ADR-0005), unions the bars, and runs the validation pipeline (session
+tagging, complete minute index, quality flags).
+
+This is the shared assembly used by both the validated-bar lake and reporting; it lives in
+``validation`` so nothing above the validation layer has to import reporting.
 """
 
 from __future__ import annotations
@@ -46,7 +50,7 @@ def assemble_validated(
     """Return the session-tagged, gap-complete, quality-flagged frame for a series.
 
     Raises:
-        SnapshotConflictError: If overlapping snapshots disagree (§5, ADR-0003).
+        SnapshotConflictError: If settled overlapping snapshots disagree (§5, ADR-0003/0005).
     """
     frames = load_series_frames(store, symbol, what_to_show)
     if not frames:

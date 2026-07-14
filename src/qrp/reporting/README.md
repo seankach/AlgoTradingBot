@@ -8,9 +8,6 @@ and the spread distribution by session.
 
 ## Architecture
 
-- `build.py` — `assemble_validated`: reads every snapshot for a symbol/series, asserts
-  cross-snapshot consistency (raising on retroactive re-adjustment, §5), unions the bars,
-  and runs the validation pipeline (session tags, complete index, quality flags).
 - `evidence.py` — pure functions over a validated frame: `earliest_traded`,
   `row_counts_by_session`, `add_spread_columns`, `spread_distribution_by_session`, and a
   text renderer. Spread uses the IBKR BID_ASK convention (open = avg bid, close = avg ask;
@@ -28,7 +25,8 @@ uv run python -m qrp.reporting --config config
 ```
 
 ```python
-from qrp.reporting import assemble_validated, row_counts_by_session, spread_distribution_by_session
+from qrp.reporting import row_counts_by_session, spread_distribution_by_session
+from qrp.validation import assemble_validated
 frame = assemble_validated(store, SessionTagger(), symbol="TSLA",
                            what_to_show=WhatToShow.TRADES, sessions_included=[...])
 counts = row_counts_by_session(frame)

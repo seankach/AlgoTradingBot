@@ -17,13 +17,13 @@ import polars as pl
 from qrp.config import load_config
 from qrp.domain.enums import WhatToShow
 from qrp.infrastructure.storage import SnapshotStore
-from qrp.reporting.build import assemble_validated
 from qrp.reporting.evidence import (
     earliest_traded,
     render_evidence,
     row_counts_by_session,
     spread_distribution_by_session,
 )
+from qrp.validation import assemble_validated
 from qrp.validation.sessions import SessionTagger
 
 

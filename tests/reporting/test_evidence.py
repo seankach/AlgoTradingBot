@@ -12,13 +12,13 @@ from qrp.config.models import StoragePathsConfig
 from qrp.domain.enums import WhatToShow
 from qrp.domain.models import Bar
 from qrp.infrastructure.storage.snapshots import SnapshotStore
-from qrp.reporting.build import assemble_validated
 from qrp.reporting.evidence import (
     add_spread_columns,
     earliest_traded,
     row_counts_by_session,
     spread_distribution_by_session,
 )
+from qrp.validation import assemble_validated
 from qrp.validation.sessions import SessionTagger
 
 
