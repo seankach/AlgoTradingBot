@@ -114,12 +114,31 @@ Module 5 is **not done** until all of these pass in CI (leakage tests are code, 
     sample-uniqueness weighting on, a label shuffle can still read slightly above chance because
     the concurrency structure survives the shuffle — that is expected, **not** a framework bug, so
     the criterion is "≈ 0.5 within tolerance", not "exactly 0.5".
-  - **Time-order shuffle** (break the sequence, keep each X↔y pair intact): a genuine
-    cross-sectional edge is a within-sample relationship and **survives** this shuffle unchanged;
-    an *ordering* leak (purge/embargo overlap, a feature peeking at an adjacent bar) is carried by
-    temporal adjacency and **vanishes** when the sequence is scrambled. So the criterion is
-    *differential*: the leak-sensitive path must **lose its lift** while a true-edge control path
-    **keeps** it. This targets ordering leaks, which the label shuffle cannot see.
+  - **Time-order shuffle** (reassign the temporal coordinates to rows, keep each X↔y pair
+    intact) — a **dormant tripwire**, not a live discriminator at this stage. *Target semantics:*
+    a genuine cross-sectional edge is a within-sample relationship and survives the shuffle, while
+    an *ordering* dependency vanishes when the sequence is scrambled. *But that differential only
+    bites once a leak or a signal actually lives in the ordering* — i.e. once features are
+    **re-derived** from the reordered bars (feature-computation look-ahead) **or** the model class
+    can **exploit cross-sample structure** (a sequence model, or a learner memorising train/test
+    adjacency). The current stack is frozen-feature + memoryless, so AUC depends only on the
+    multiset of (Xᵢ, yᵢ) pairs, which any row permutation preserves — the shuffle is provably a
+    **no-op today, by design** (measured: a genuine ρ=0.2 edge *and* a real one-bar look-ahead leak
+    both move < 0.001 under it). **The test therefore expects a null result now**, and its value is
+    prospective: **a non-null result is itself the alarm** — it means a cross-sample dependency has
+    entered the model class (Phase 3+) and must be explained before any number is trusted. It is
+    kept, not deleted as "testing nothing", precisely because that is when it starts to bite. Until
+    then, feature-computation look-ahead is owned by the `close_t` PIT test (test a) and fold
+    overlap by purge/embargo (test c) — see the layering principle below.
+
+**Layering principle (the rule that makes the test→leak assignment legible).** *A leak is
+detectable only by a test operating at or above the layer where the leak enters.* The `y_{i+1}`
+look-ahead survives the row-permutation shuffle not because it is gone but because it was baked in
+**upstream, at feature construction** — so the duty correctly sits with the `close_t` PIT test,
+which operates at that layer. This is also why re-implementing feature re-derivation at the Study
+level would be wrong: it would duplicate `close_t` on frozen features it cannot fully reconstruct.
+Each §7 test is placed at the layer its target leak enters — construction (a, b), CV assembly (c),
+scoring (d-label), and model class (d-time-order, dormant until the class grows).
 
 **Why the separation must be structural, not a magnitude threshold (review 2026-07-14).** The
 graded canary measured the framework's resolution limit: at n≈8k the smallest leak-correlation it
@@ -127,13 +146,17 @@ can lift above the 2σ noise band is ρ≈0.05, and the limit falls as 1/√n �
 dataset it reaches ρ≈0.001. Real intraday edges live at ρ≈0.05–0.20. **Therefore a subtle leak and
 a genuine edge produce the *same* AUC** — both sit tens of σ above the band. It follows that the
 leakage suite **cannot** use "AUC above the noise band" to decide leak-vs-edge; that test fires
-identically for both and is worthless as a discriminator. Separation is instead **structural**:
-(i) *correct purging/embargo* removes the overlap that carries most look-ahead leaks (test c is the
-guarantee, not a hope); and (ii) the *time-order shuffle* is differential — an edge is invariant to
-it, an ordering leak collapses under it. The magnitude of the score is used only to confirm a
-*known* leak is caught (the canary) and to size effects downstream (DSR/PBO); it is never the thing
-that certifies a novel signal is clean. Any test whose pass/fail depends on the AUC level rather
-than on a structural invariant (shuffle response, purge count) is a bug in the gate.
+identically for both and is worthless as a discriminator. Separation is instead **structural**, and
+it is placed at the layer each leak enters (see the layering principle above): (i) *feature-level
+`close_t` PIT* rejects computation look-ahead where it is born (test a/b); (ii) *correct
+purging/embargo* removes the fold overlap that carries the rest (test c is the guarantee, not a
+hope); and (iii) the *time-order shuffle* is the differential discriminator *in the target* — but
+it is **dormant** while the stack is frozen-feature + memoryless (it can only bite once features are
+re-derived post-shuffle or the model exploits cross-sample structure), so today it is a tripwire,
+not a live gate. The magnitude of the score is used only to confirm a *known* leak is caught (the
+canary) and to size effects downstream (DSR/PBO); it never certifies a novel signal is clean. Any
+test whose pass/fail depends on the AUC level rather than on a structural invariant (shuffle
+response, purge count) is a bug in the gate.
 
 - **(e) Planted-leak canary** — inject a deliberately leaking feature (a copy of the label) and
   assert the framework **flags** it: the raw in-sample metric spikes while the machinery still

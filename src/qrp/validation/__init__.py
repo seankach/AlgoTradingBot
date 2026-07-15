@@ -17,6 +17,12 @@ from qrp.validation.lake import (
     build_and_store,
     build_validated_bars,
 )
+from qrp.validation.leakage import (
+    LeakageError,
+    assert_features_are_not_outcomes,
+    shuffle_labels,
+    shuffle_time_order,
+)
 from qrp.validation.quality import flag_quality
 from qrp.validation.session_index import (
     attach_bars,
@@ -30,6 +36,7 @@ from qrp.validation.study import CorrelationSignModel, Model, Study, StudyResult
 
 __all__ = [
     "CorrelationSignModel",
+    "LeakageError",
     "Model",
     "PurgedCPCV",
     "SessionTagger",
@@ -39,6 +46,7 @@ __all__ = [
     "ValidatedBarStore",
     "ValidatedBuildManifest",
     "assemble_validated",
+    "assert_features_are_not_outcomes",
     "assert_no_conflicts",
     "attach_bars",
     "bars_to_frame",
@@ -49,5 +57,7 @@ __all__ = [
     "flag_quality",
     "load_series_frames",
     "purged_train_mask",
+    "shuffle_labels",
+    "shuffle_time_order",
     "validated_frame",
 ]

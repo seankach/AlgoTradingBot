@@ -32,6 +32,7 @@ import numpy.typing as npt
 import polars as pl
 from scipy.stats import rankdata
 
+from qrp.validation.leakage import assert_features_are_not_outcomes
 from qrp.validation.splits import PurgedCPCV
 
 _F64 = npt.NDArray[np.float64]
@@ -135,8 +136,9 @@ class Study:
 
         The dataset is sorted by ``decision_ts`` so split indices align with the arrays. Only
         non-zero labels are scored (the directional up/down question). This is the only place a
-        number is produced (ADR-0009).
+        number is produced (ADR-0009), so the label/outcome boundary guard (§7-b) fires here.
         """
+        assert_features_are_not_outcomes(feature_columns)
         ordered = dataset.sort("decision_ts")
         labels = ordered.select("decision_ts", "entry_ts", "exit_ts")
         x = ordered.select(feature_columns).to_numpy().astype(np.float64)
