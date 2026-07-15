@@ -160,10 +160,12 @@ hash for an idea that never reached the choke point), so it is stated and backst
 
 ## Consequences
 
-- **Built now (Module 5 step 6):** `qrp.validation.overfitting` behind the same import-linter metric
-  boundary as the AUC primitives — `pbo(...)` (CSCV, `S=16` default) and `auc_deflation(...)` (the
-  permutation-null harness); a dedicated append-only `trials` table per `dataset_id`; and the
-  per-block OOS AUC retention on `Study.run`.
+- **Built now (Module 5 step 6):** `qrp.validation.overfitting` — `pbo(...)` (CSCV, `S=16` default)
+  and `auc_deflation(...)` (the permutation-null harness); a dedicated append-only `trials` registry
+  per `dataset_id`; and per-block OOS AUC retrieval from `Study`. `S`/`B` are explicit parameters
+  defaulting to the committed values; their config home is `config/validation.yaml`, created when the
+  `ValidationConfig` model lands (carried from ADR-0009, along with the CPCV `N/k` and the
+  metric-module import boundary — neither built yet; tracked, not claimed here).
 - **Reserved (Phase 5/6):** the returns-series DSR, built on the real backtester's costed P&L.
 - **CI contract:** PBO on a *known-overfit* synthetic set (many noise trials, best-IS picked) must
   report **high PBO**; on a single genuine-edge trial replicated, PBO stays low / undefined — the

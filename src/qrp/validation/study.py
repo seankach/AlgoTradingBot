@@ -172,6 +172,44 @@ class Study:
             n_paths=len(accs),
         )
 
+    def block_aucs(
+        self,
+        dataset: pl.DataFrame,
+        model: Model,
+        *,
+        feature_columns: list[str],
+        h_bars: int,
+        n_blocks: int,
+        label_column: str = "label",
+    ) -> _F64:
+        """Per-block OOS AUC — one trial's PBO matrix row (ADR-0010 §1).
+
+        Each of ``n_blocks`` contiguous time blocks is scored as a single purged test fold (reusing
+        ``PurgedCPCV(n_blocks, 1)``, so the block seams are purged). Returns an ``n_blocks`` vector
+        of AUCs (``nan`` where a block has no scorable both-class OOS labels).
+        """
+        assert_features_are_not_outcomes(feature_columns)
+        ordered = dataset.sort("decision_ts")
+        labels = ordered.select("decision_ts", "entry_ts", "exit_ts")
+        x = ordered.select(feature_columns).to_numpy().astype(np.float64)
+        y = ordered.get_column(label_column).to_numpy().astype(np.float64)
+
+        splitter = PurgedCPCV(n_groups=n_blocks, k_test_groups=1)
+        out: list[float] = []
+        for train_idx, test_idx in splitter.split(labels, h_bars=h_bars):
+            if train_idx.size == 0 or test_idx.size == 0:
+                out.append(float("nan"))
+                continue
+            fitted = model.fit(x[train_idx], y[train_idx], np.ones(train_idx.size))
+            score = fitted.predict(x[test_idx])
+            actual = y[test_idx]
+            scored = actual != 0
+            if scored.sum() < 2:
+                out.append(float("nan"))
+                continue
+            out.append(auc(actual[scored] > 0, score[scored]))
+        return np.asarray(out, dtype=np.float64)
+
     def evaluate_lockbox(
         self,
         dataset: pl.DataFrame,

@@ -33,6 +33,13 @@ from qrp.validation.lockbox import (
     LockboxTouch,
     PostgresLockboxStore,
 )
+from qrp.validation.overfitting import (
+    DEFAULT_PBO_BLOCKS,
+    auc_deflation,
+    deflated_probability,
+    pbo,
+    permutation_null,
+)
 from qrp.validation.quality import flag_quality
 from qrp.validation.session_index import (
     attach_bars,
@@ -43,10 +50,21 @@ from qrp.validation.session_index import (
 from qrp.validation.sessions import SessionTagger
 from qrp.validation.splits import PurgedCPCV, purged_train_mask
 from qrp.validation.study import CorrelationSignModel, Model, Study, StudyResult
+from qrp.validation.trials import (
+    TRIALS_DDL,
+    InMemoryTrialStore,
+    PostgresTrialStore,
+    Trial,
+    TrialStore,
+    trial_hash,
+)
 
 __all__ = [
+    "DEFAULT_PBO_BLOCKS",
+    "TRIALS_DDL",
     "CorrelationSignModel",
     "InMemoryLockboxStore",
+    "InMemoryTrialStore",
     "LeakageError",
     "Lockbox",
     "LockboxBurnedError",
@@ -55,27 +73,35 @@ __all__ = [
     "LockboxTouch",
     "Model",
     "PostgresLockboxStore",
+    "PostgresTrialStore",
     "PurgedCPCV",
     "SessionTagger",
     "SnapshotConflictError",
     "Study",
     "StudyResult",
+    "Trial",
+    "TrialStore",
     "ValidatedBarStore",
     "ValidatedBuildManifest",
     "assemble_validated",
     "assert_features_are_not_outcomes",
     "assert_no_conflicts",
     "attach_bars",
+    "auc_deflation",
     "bars_to_frame",
     "build_and_store",
     "build_session_index",
     "build_validated_bars",
+    "deflated_probability",
     "find_conflicts",
     "flag_quality",
     "load_series_frames",
+    "pbo",
+    "permutation_null",
     "purged_train_mask",
     "shuffle_labels",
     "shuffle_labels_block",
     "shuffle_time_order",
+    "trial_hash",
     "validated_frame",
 ]
