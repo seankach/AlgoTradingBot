@@ -1,8 +1,8 @@
 # ADR-0009: Validation framework — CPCV, the Study choke point, lockbox, and the leakage gate
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-14
-- **Deciders:** (awaiting approval)
+- **Deciders:** Romesh Sharma (approved 2026-07-14 with four tightenings, folded in below)
 - **Charter refs:** §7 (validation framework), §2 invariants I5 (lockbox), I6, I1/I3; §8
   (costs at 1x/2x/3x); §9 (quality gates); builds on ADR-0007 (LabelSpec lifespans), ADR-0003
   (`dataset_id`), ADR-0002 (CI-enforced boundaries)
@@ -46,7 +46,11 @@ choke-point object), never a matter of the developer's memory.
   combination of test groups (`C(N, k)`), the remaining groups form the train set. This yields
   `C(N, k)` splits and many distinct backtest paths (López de Prado). It is constructed from the
   **label frame** (`decision_ts, entry_ts, exit_ts`) so it can purge/embargo from real lifespans
-  (§2 below), and it emits train/test integer index arrays only.
+  (§2 below), and it emits train/test integer index arrays only. **`N` and `k` are config**
+  (`config/validation.yaml`, defaults `N = 6`, `k = 2` → 15 paths), with a comment at the config
+  site making the coupling explicit: more paths means more trials, trials feed the deflated
+  Sharpe, so raising `N` deflates your own Sharpe — the trade-off must be visible where someone
+  would edit it.
 - **`Study`** is the orchestrator and the *only* object that turns a `(model, dataset_id)` into a
   metric. It: loads the dataset + labels for the `dataset_id`; builds `PurgedCPCV`; for each split
   fits the model on the purged/embargoed/uniqueness-weighted train fold and predicts the test
@@ -103,8 +107,16 @@ Module 5 is **not done** until all of these pass in CI (leakage tests are code, 
   a feature engineered to correlate with the forward label must fail the check.
 - **(c) Purge/embargo boundary correctness** — no train sample's lifespan overlaps its test fold,
   the embargo region contains no train samples, and the removed counts match the spec.
-- **(d) Shuffle test** — destroy the time ordering; a model's deflated Sharpe must collapse to
-  ≈ chance.
+- **(d) Two shuffle tests, each naming the failure mode it targets** — "collapses to chance" is
+  underspecified; there are two distinct shuffles proving different things:
+  - **Label shuffle** (break the X↔y correspondence): a model's out-of-fold AUC must return to
+    ≈ 0.5, proving the model is not memorising noise. *Trap (document in the test):* with
+    sample-uniqueness weighting on, a label shuffle can still read slightly above chance because
+    the concurrency structure survives the shuffle — that is expected, **not** a framework bug, so
+    the criterion is "≈ 0.5 within tolerance", not "exactly 0.5".
+  - **Time-order shuffle** (break the sequence): the leak-sensitive path must show **no
+    improvement**, proving the CV machinery is not leaking through ordering (purge/embargo, fold
+    construction). This targets ordering leaks, which the label shuffle cannot see.
 - **(e) Planted-leak canary** — inject a deliberately leaking feature (a copy of the label) and
   assert the framework **flags** it: the raw in-sample metric spikes while the machinery still
   runs, proving the suite can catch a *known* leak. A framework that cannot detect a planted leak
@@ -115,10 +127,32 @@ Module 5 is **not done** until all of these pass in CI (leakage tests are code, 
 
 - A `Model` protocol (weight-aware `fit`/`predict`) keeps the framework model-agnostic; concrete
   models (GBMs) are Phase 3 and not built now (§10).
-- **New dependencies (ADR-gated, §3c):** `mlflow` (tracking client) and `psycopg` (Postgres
-  registry) come online here — already the §4 stack, and `docker-compose.yml` exists. The
-  statistics use `numpy`; `scipy` is added only if a required distribution function is not cleanly
-  expressible in numpy (decided at implementation, flagged in the PR).
+- **New dependencies (ADR-gated, §3c, pre-approved):** `mlflow` (tracking client) and `psycopg`
+  (Postgres registry) come online here — already the §4 stack, and `docker-compose.yml` exists.
+  **`scipy` is pre-approved**: use `scipy.stats` for the deflated-Sharpe normal CDF and the
+  PBO rank/logit machinery rather than hand-rolling them in numpy.
+
+### Testing precision (two things to get exactly right)
+
+- **Purge boundary (test 5c) asserts the exact boundary, not "some purging occurred."** Use a
+  label whose `exit_ts` lands one bar *before*, *exactly on*, and one bar *after* the test span,
+  and assert the correct include/exclude for each. An off-by-one here silently purges nothing on
+  some folds.
+- **Lockbox enforcement exercises the *third* touch.** The fixture test must assert that the third
+  `touch()` **raises**, not merely that the first two append — otherwise the enforcement rots
+  untested.
+
+### Build order (corrected — the canary needs a substrate to run through)
+
+1. **purge/embargo primitive + minimal `PurgedCPCV`** — train/test index arrays derived from the
+   label lifespans.
+2. **Minimal scoring path inside `Study`** — splits → one number.
+3. **Plant the canary immediately** — a copy-of-the-label feature; prove this two-component
+   pipeline catches it *before* building anything on top. **Stop here for review** — the planted
+   leak must be seen to be caught before the full suite or any real number.
+4. The full §7 leakage suite (a, b, c, both shuffles).
+5. The lockbox (append-only counter + enforcement).
+6. The deflated Sharpe / PBO metrics.
 
 ## Consequences
 
