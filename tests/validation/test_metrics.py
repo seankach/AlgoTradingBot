@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from qrp.validation.study import auc, balanced_accuracy
+from qrp.validation.metrics import auc, balanced_accuracy
 
 
 def test_metrics_are_imbalance_robust_but_accuracy_is_not() -> None:

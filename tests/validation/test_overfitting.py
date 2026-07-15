@@ -55,6 +55,18 @@ def test_pbo_undefined_below_two_trials_or_odd_blocks() -> None:
     assert math.isnan(pbo(np.zeros((5, 7))))  # odd S: no symmetric split
 
 
+def test_monte_carlo_pbo_matches_enumeration() -> None:
+    # The S=24 blowup fix swapped full enumeration for sampling; prove it's the SAME estimator, not
+    # just faster. At S=16, C(16,8)=12,870 is enumerable exactly; the sampled estimate must converge
+    # to it within sampling error (std ~ sqrt(p(1-p)/n_samples)), else a biased estimator silently
+    # changes what passes promotion.
+    m = _overfit_matrix(20, 16, seed=2)
+    exact = pbo(m, max_splits=20_000)  # 12,870 <= 20,000 -> full enumeration
+    sampled = [pbo(m, max_splits=4_000, seed=s) for s in range(6)]
+    assert all(abs(s - exact) < 0.03 for s in sampled)  # each within ~3 sigma
+    assert abs(float(np.mean(sampled)) - exact) < 0.012  # the mean converges tightly
+
+
 def test_pbo_s_sensitivity_is_reportable() -> None:
     # ADR-0010 requires reporting PBO at S in {8,16,24}. Here we just exercise it and confirm the
     # overfit signature persists across S (if it swung wildly, that swing is the thing to surface).

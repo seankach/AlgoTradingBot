@@ -140,3 +140,14 @@ forbidden_modules = ["ib_async"]
 ignore_imports = [
     "qrp.infrastructure.brokers.ibkr.** -> ib_async",
 ]
+
+# The scoring primitives are behind the Study door (ADR-0009): a metric may be computed only via
+# qrp.validation.study, so nothing can bypass purge/embargo, the trial counter, or the deflation.
+[[tool.importlinter.contracts]]
+name = "Scoring primitives are reachable only through Study (ADR-0009)"
+type = "forbidden"
+source_modules = ["qrp"]
+forbidden_modules = ["qrp.validation.metrics"]
+ignore_imports = [
+    "qrp.validation.study -> qrp.validation.metrics",
+]

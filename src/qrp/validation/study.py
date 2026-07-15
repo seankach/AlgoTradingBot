@@ -30,14 +30,13 @@ from typing import Protocol, runtime_checkable
 import numpy as np
 import numpy.typing as npt
 import polars as pl
-from scipy.stats import rankdata
 
 from qrp.validation.leakage import assert_features_are_not_outcomes
 from qrp.validation.lockbox import Lockbox
+from qrp.validation.metrics import auc, balanced_accuracy
 from qrp.validation.splits import PurgedCPCV
 
 _F64 = npt.NDArray[np.float64]
-_Bool = npt.NDArray[np.bool_]
 
 
 @dataclass(frozen=True)
@@ -48,30 +47,6 @@ class StudyResult:
     balanced_accuracy: float  # imbalance-robust
     accuracy: float  # DIAGNOSTIC ONLY — majority-class-biased under imbalance
     n_paths: int
-
-
-def auc(actual_positive: _Bool, score: _F64) -> float:
-    """Area under the ROC curve (Mann-Whitney), with average ranks for ties.
-
-    ``0.5`` is chance regardless of class balance. Returns ``nan`` if a class is absent.
-    """
-    n_pos = int(actual_positive.sum())
-    n_neg = int((~actual_positive).sum())
-    if n_pos == 0 or n_neg == 0:
-        return float("nan")
-    ranks = rankdata(score)  # average ranks, 1-based
-    return float((ranks[actual_positive].sum() - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg))
-
-
-def balanced_accuracy(actual_positive: _Bool, predicted_positive: _Bool) -> float:
-    """Mean of per-class recall — 0.5 under chance regardless of class balance."""
-    tp = int((predicted_positive & actual_positive).sum())
-    fn = int((~predicted_positive & actual_positive).sum())
-    tn = int((~predicted_positive & ~actual_positive).sum())
-    fp = int((predicted_positive & ~actual_positive).sum())
-    recall_pos = tp / (tp + fn) if (tp + fn) else float("nan")
-    recall_neg = tn / (tn + fp) if (tn + fp) else float("nan")
-    return float((recall_pos + recall_neg) / 2)
 
 
 @runtime_checkable
