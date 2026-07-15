@@ -51,7 +51,13 @@ from qrp.validation.session_index import (
 )
 from qrp.validation.sessions import SessionTagger
 from qrp.validation.splits import PurgedCPCV, purged_train_mask
-from qrp.validation.study import CorrelationSignModel, Model, Study, StudyResult
+from qrp.validation.study import (
+    CorrelationSignModel,
+    FitValidation,
+    Model,
+    Study,
+    StudyResult,
+)
 from qrp.validation.trials import (
     TRIALS_DDL,
     InMemoryTrialStore,
@@ -67,6 +73,7 @@ __all__ = [
     "DEFAULT_PBO_BLOCKS",
     "TRIALS_DDL",
     "CorrelationSignModel",
+    "FitValidation",
     "InMemoryLockboxStore",
     "InMemoryTrialStore",
     "LeakageError",

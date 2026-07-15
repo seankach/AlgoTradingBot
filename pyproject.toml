@@ -24,6 +24,9 @@ dependencies = [
     # Postgres client for the lockbox registry (append-only touch counter, I5). Pre-approved in
     # ADR-0009 §3c; the §4 stack + docker-compose.yml already stand up Postgres.
     "psycopg[binary]>=3.1",
+    # First Phase-3 model (ADR-0011): native NaN handling, fast, sklearn-style fit(sample_weight=).
+    # Deliberately the ONLY GBM library — no XGBoost/CatBoost abstraction until one is needed.
+    "lightgbm>=4.0",
 ]
 
 # PEP 735 dependency group. Installed with `uv sync` (default), excluded from the
@@ -112,7 +115,7 @@ warn_required_dynamic_aliases = true
 # boundary in qrp.validation.sessions and its outputs are immediately converted to plain
 # datetimes / Polars.
 [[tool.mypy.overrides]]
-module = ["exchange_calendars.*", "scipy.*"]
+module = ["exchange_calendars.*", "scipy.*", "lightgbm.*"]
 ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------

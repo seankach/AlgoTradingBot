@@ -51,8 +51,10 @@ class LaggedLabelAdversary:
     train_pos: _F64 | None = None
     train_y: _F64 | None = None
 
-    def fit(self, x: _F64, y: _F64, sample_weight: _F64) -> LaggedLabelAdversary:
-        """Store the training positions and labels (a new instance)."""
+    def fit(
+        self, x: _F64, y: _F64, sample_weight: _F64, *, validation: object = None
+    ) -> LaggedLabelAdversary:
+        """Store the training positions and labels (a new instance; ignores val)."""
         return LaggedLabelAdversary(train_pos=x[:, -1].copy(), train_y=y.copy())
 
     def predict(self, x: _F64) -> _F64:

@@ -1,6 +1,9 @@
-"""Study — the only path to a metric (ADR-0009). Minimal scoring path (build step 2/3).
+"""Study — the only path to a metric (ADR-0009/0010/0011).
 
-``Study.run`` turns ``(dataset, model)`` into a :class:`StudyResult` over the CPCV splits. The
+``Study.run`` turns ``(dataset, model)`` into a :class:`StudyResult` over the CPCV splits, with
+sample-uniqueness weighting on (§7), the trial registered against the count that deflates PBO /
+auc_deflation (ADR-0010), and — if configured — a Study-owned purged inner validation fold carved
+for the model's early stopping / calibration (ADR-0011). The
 **primary metric is AUC** — imbalance-robust and centred on 0.5 under chance — with balanced
 accuracy alongside it; raw directional accuracy is kept only as a *diagnostic*, because under
 class imbalance it rewards majority-class prediction rather than signal (review 2026-07-14).
@@ -16,9 +19,6 @@ Multiclass scoring scheme (explicit — it affects every downstream number, incl
     problem (Phase 2), not part of the directional discrimination the barrier trades on.
     Consequence: ~21% of labels (the timeouts) do not enter the score; when meta-labelling
     lands, the timeout class gets its own gate rather than being folded into the AUC here.
-
-The multiple-testing machinery (DSR/PBO), the lockbox, and the metric-module import boundary
-are added in later build steps; this is the smallest substrate the leak canaries run through.
 """
 
 from __future__ import annotations
@@ -53,12 +53,32 @@ class StudyResult:
     n_paths: int
 
 
+@dataclass(frozen=True)
+class FitValidation:
+    """An already-separated, already-purged inner validation fold (ADR-0011).
+
+    ``Study`` carves this from each training fold and hands it to the model; the model never sees
+    timestamps and never carves a split itself (purge correctness stays inside the framework, §7).
+    Used for GBM early stopping now and calibration in Phase 8.
+    """
+
+    x: _F64
+    y: _F64
+    sample_weight: _F64
+
+
 @runtime_checkable
 class Model(Protocol):
     """A weight-aware fit/predict model. Concrete trading models are Phase 3 (§10)."""
 
-    def fit(self, x: _F64, y: _F64, sample_weight: _F64) -> Model:
-        """Fit and return the fitted model (a new instance; no shared mutable state)."""
+    def fit(
+        self, x: _F64, y: _F64, sample_weight: _F64, *, validation: FitValidation | None = None
+    ) -> Model:
+        """Fit and return the fitted model (a new instance; no shared mutable state).
+
+        ``validation``, if given, is a Study-carved purged inner fold for early stopping; models
+        that do not use it must accept and ignore it.
+        """
         ...
 
     def predict(self, x: _F64) -> _F64:
@@ -78,8 +98,10 @@ class CorrelationSignModel:
     best: int = -1
     sign: float = 1.0
 
-    def fit(self, x: _F64, y: _F64, sample_weight: _F64) -> CorrelationSignModel:
-        """Pick the feature with the highest absolute Pearson correlation to ``y``."""
+    def fit(
+        self, x: _F64, y: _F64, sample_weight: _F64, *, validation: FitValidation | None = None
+    ) -> CorrelationSignModel:
+        """Pick the feature with the highest absolute Pearson correlation to ``y`` (ignores val)."""
         xf = np.nan_to_num(x, nan=0.0)
         y_centered = y - y.mean()
         best, best_abs, best_sign = -1, -1.0, 1.0
@@ -102,6 +124,26 @@ def _epoch_us(frame: pl.DataFrame, column: str) -> _I64:
     return result
 
 
+def _carve_inner_fold(
+    train_idx: _I64, entry_us: _I64, exit_us: _I64, frac: float
+) -> tuple[_I64, _I64]:
+    """Split a training fold into (inner-train, validation), purged at the seam (ADR-0011).
+
+    The validation fold is the last ``frac`` of the training fold by decision order (``train_idx``
+    is sorted). Inner-train samples whose lifespan overlaps the validation span are purged, so the
+    inner split is leak-free exactly like the outer one — the model never has to know it happened.
+    """
+    n_val = max(1, round(frac * train_idx.size))
+    val_idx = train_idx[-n_val:]
+    candidate = train_idx[:-n_val]
+    if candidate.size == 0:
+        return candidate, val_idx
+    span_entry = int(entry_us[val_idx].min())
+    span_exit = int(exit_us[val_idx].max())
+    overlaps = (entry_us[candidate] <= span_exit) & (exit_us[candidate] >= span_entry)
+    return candidate[~overlaps], val_idx
+
+
 class Study:
     """Runs a model over the CPCV splits and returns aggregated out-of-fold metrics.
 
@@ -111,9 +153,39 @@ class Study:
     deflates PBO / auc_deflation cannot silently miss a config that was tried (ADR-0010).
     """
 
-    def __init__(self, splitter: PurgedCPCV, *, trial_store: TrialStore | None = None) -> None:
+    def __init__(
+        self,
+        splitter: PurgedCPCV,
+        *,
+        trial_store: TrialStore | None = None,
+        inner_val_frac: float | None = None,
+    ) -> None:
         self._splitter = splitter
         self._trial_store = trial_store
+        self._inner_val_frac = inner_val_frac
+
+    def _fit_fold(
+        self,
+        model: Model,
+        x: _F64,
+        y: _F64,
+        weights: _F64,
+        train_idx: _I64,
+        entry_us: _I64,
+        exit_us: _I64,
+    ) -> Model:
+        """Fit ``model`` on a training fold, carving a purged inner validation fold if configured.
+
+        Study owns the inner split (ADR-0011): the model receives already-separated, already-purged
+        train and validation arrays and never sees timestamps.
+        """
+        if self._inner_val_frac is None:
+            return model.fit(x[train_idx], y[train_idx], weights[train_idx])
+        inner_idx, val_idx = _carve_inner_fold(train_idx, entry_us, exit_us, self._inner_val_frac)
+        if inner_idx.size == 0 or val_idx.size == 0:
+            return model.fit(x[train_idx], y[train_idx], weights[train_idx])
+        validation = FitValidation(x[val_idx], y[val_idx], weights[val_idx])
+        return model.fit(x[inner_idx], y[inner_idx], weights[inner_idx], validation=validation)
 
     def run(
         self,
@@ -137,11 +209,9 @@ class Study:
         labels = ordered.select("decision_ts", "entry_ts", "exit_ts")
         x = ordered.select(feature_columns).to_numpy().astype(np.float64)
         y = ordered.get_column(label_column).to_numpy().astype(np.float64)
-        weights = uniqueness_weights(
-            _epoch_us(labels, "decision_ts"),
-            _epoch_us(labels, "entry_ts"),
-            _epoch_us(labels, "exit_ts"),
-        )
+        entry_us = _epoch_us(labels, "entry_ts")
+        exit_us = _epoch_us(labels, "exit_ts")
+        weights = uniqueness_weights(_epoch_us(labels, "decision_ts"), entry_us, exit_us)
 
         aucs: list[float] = []
         baccs: list[float] = []
@@ -149,7 +219,7 @@ class Study:
         for train_idx, test_idx in self._splitter.split(labels, h_bars=h_bars):
             if train_idx.size == 0 or test_idx.size == 0:
                 continue
-            fitted = model.fit(x[train_idx], y[train_idx], weights[train_idx])
+            fitted = self._fit_fold(model, x, y, weights, train_idx, entry_us, exit_us)
             score = fitted.predict(x[test_idx])
             actual = y[test_idx]
             scored = actual != 0
@@ -203,11 +273,9 @@ class Study:
         labels = ordered.select("decision_ts", "entry_ts", "exit_ts")
         x = ordered.select(feature_columns).to_numpy().astype(np.float64)
         y = ordered.get_column(label_column).to_numpy().astype(np.float64)
-        weights = uniqueness_weights(
-            _epoch_us(labels, "decision_ts"),
-            _epoch_us(labels, "entry_ts"),
-            _epoch_us(labels, "exit_ts"),
-        )
+        entry_us = _epoch_us(labels, "entry_ts")
+        exit_us = _epoch_us(labels, "exit_ts")
+        weights = uniqueness_weights(_epoch_us(labels, "decision_ts"), entry_us, exit_us)
 
         splitter = PurgedCPCV(n_groups=n_blocks, k_test_groups=1)
         out: list[float] = []
@@ -215,7 +283,7 @@ class Study:
             if train_idx.size == 0 or test_idx.size == 0:
                 out.append(float("nan"))
                 continue
-            fitted = model.fit(x[train_idx], y[train_idx], weights[train_idx])
+            fitted = self._fit_fold(model, x, y, weights, train_idx, entry_us, exit_us)
             score = fitted.predict(x[test_idx])
             actual = y[test_idx]
             scored = actual != 0

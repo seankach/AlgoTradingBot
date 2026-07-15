@@ -40,8 +40,10 @@ class MemorizingModel:
     x_train: _F64 | None = None
     y_train: _F64 | None = None
 
-    def fit(self, x: _F64, y: _F64, sample_weight: _F64) -> MemorizingModel:
-        """Memorise the training rows (a new instance; no shared mutable state)."""
+    def fit(
+        self, x: _F64, y: _F64, sample_weight: _F64, *, validation: object = None
+    ) -> MemorizingModel:
+        """Memorise the training rows (a new instance; no shared mutable state; ignores val)."""
         return MemorizingModel(x_train=np.nan_to_num(x).copy(), y_train=y.copy())
 
     def predict(self, x: _F64) -> _F64:
