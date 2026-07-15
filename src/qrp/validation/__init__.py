@@ -21,6 +21,7 @@ from qrp.validation.leakage import (
     LeakageError,
     assert_features_are_not_outcomes,
     shuffle_labels,
+    shuffle_labels_block,
     shuffle_time_order,
 )
 from qrp.validation.quality import flag_quality
@@ -58,6 +59,7 @@ __all__ = [
     "load_series_frames",
     "purged_train_mask",
     "shuffle_labels",
+    "shuffle_labels_block",
     "shuffle_time_order",
     "validated_frame",
 ]

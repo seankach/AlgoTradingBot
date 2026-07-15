@@ -109,11 +109,24 @@ Module 5 is **not done** until all of these pass in CI (leakage tests are code, 
   the embargo region contains no train samples, and the removed counts match the spec.
 - **(d) Two shuffle tests, each naming the failure mode it targets** — "collapses to chance" is
   underspecified; there are two distinct shuffles proving different things:
-  - **Label shuffle** (break the X↔y correspondence): a model's out-of-fold AUC must return to
-    ≈ 0.5, proving the model is not memorising noise. *Trap (document in the test):* with
-    sample-uniqueness weighting on, a label shuffle can still read slightly above chance because
-    the concurrency structure survives the shuffle — that is expected, **not** a framework bug, so
-    the criterion is "≈ 0.5 within tolerance", not "exactly 0.5".
+  - **Label shuffle** (full random permutation — break the X↔y correspondence): a model's
+    out-of-fold AUC must return to ≈ 0.5, proving the model is not memorising noise. *Trap
+    (document in the test):* with sample-uniqueness weighting on, a label shuffle can still read
+    slightly above chance because the concurrency structure survives the shuffle — that is expected,
+    **not** a framework bug, so the criterion is "≈ 0.5 within tolerance", not "exactly 0.5".
+    - **Block label shuffle** — a *second dormant tripwire*, the mirror of the time-order one. A
+      **full** permutation destroys the label *autocorrelation itself*, which is fine for a
+      memoryless model but wrong once a **sequence model** (Phase 3+) can legitimately use temporal
+      structure: there a collapse to 0.5 no longer distinguishes a leak from a genuine sequence
+      edge, so the full shuffle would flag real edges as leaks — the opposite overclaim. The **block
+      shuffle** reorders contiguous label blocks: it *preserves within-block autocorrelation*
+      (a genuine sequence edge survives) while *breaking the X↔y tie across blocks* (a spurious
+      per-sample tie collapses). **Crossover, stated explicitly:** *today* the full label shuffle is
+      the guard and the block shuffle is dormant (a memoryless model has no temporal structure to
+      preserve, so the full shuffle suffices); *once a cross-sample model exists* the block shuffle
+      takes over the leak-vs-edge discrimination duty and the full shuffle degrades to a
+      memorisation check only. Filed now as a skipped stub with this reasoning so it is not
+      rediscovered from scratch when it arms.
   - **Time-order shuffle** (reassign the temporal coordinates to rows, keep each X↔y pair
     intact) — a **dormant tripwire**, not a live discriminator at this stage. *Target semantics:*
     a genuine cross-sectional edge is a within-sample relationship and survives the shuffle, while

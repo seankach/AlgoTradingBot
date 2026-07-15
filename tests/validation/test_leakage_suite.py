@@ -22,6 +22,7 @@ from qrp.validation.leakage import (
     LeakageError,
     assert_features_are_not_outcomes,
     shuffle_labels,
+    shuffle_labels_block,
     shuffle_time_order,
 )
 from qrp.validation.splits import PurgedCPCV
@@ -197,3 +198,32 @@ def test_time_order_shuffle_is_dormant_by_design() -> None:
         base = _auc(frame, ["feat"])
         shuffled = _auc(shuffle_time_order(frame, seed=3), ["feat"])
         assert abs(shuffled - base) < 0.01  # invariant today, by design
+
+
+@pytest.mark.skip(
+    reason="Block-shuffle discrimination is DORMANT until a sequence model exists (Phase 3+). "
+    "Filed so the crossover reasoning is not rediscovered from scratch."
+)
+def test_block_shuffle_discriminates_sequence_edge_from_leak() -> None:
+    """Second dormant tripwire — the mirror of the full-vs-frozen crossover (review 2026-07-15).
+
+    Today the FULL label shuffle is the guard: it collapses even a frozen look-ahead leak to 0.5.
+    But a full permutation also destroys the label AUTOCORRELATION itself. Once a sequence model
+    (Phase 3+) can legitimately use temporal structure, "collapse to 0.5 under a full shuffle" no
+    longer means "leak" — it also fires for a genuine sequence edge, the opposite overclaim.
+
+    At that point the BLOCK shuffle takes over the discrimination duty: reordering contiguous label
+    blocks preserves within-block autocorrelation (a genuine sequence edge survives) while breaking
+    the X↔y tie across blocks (a spurious per-sample leak collapses). The full shuffle degrades to a
+    memorisation check only.
+
+    When armed (a real sequence model + block_size > its receptive field), this test asserts:
+        * genuine sequence edge:  block-shuffled AUC stays elevated (autocorrelation preserved);
+        * spurious per-sample leak: block-shuffled AUC collapses to ~0.5 (X↔y tie broken).
+    The memoryless CorrelationSignModel cannot express the distinction, so the stub is skipped.
+    """
+    # Placeholder wiring so the helper stays covered/imported until the model class arrives.
+    rng = np.random.default_rng(0)
+    ya = _autocorr_labels(2000, rng)
+    frame = _frame(ya).with_columns(pl.Series("feat", np.roll(ya, -1)))
+    _ = shuffle_labels_block(frame, seed=0, block_size=200)
