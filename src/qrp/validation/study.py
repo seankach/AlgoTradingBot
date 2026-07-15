@@ -7,6 +7,16 @@ class imbalance it rewards majority-class prediction rather than signal (review 
 When models emit calibrated probabilities (Phase 3/8), a proper scoring rule (log-loss / Brier)
 becomes the number the deflated Sharpe is computed on; that is noted and deferred.
 
+Multiclass scoring scheme (explicit — it affects every downstream number, incl. DSR):
+    The label is three-class ``+1 / -1 / 0``. Scoring is **binary sign-AUC over the *resolved*
+    (non-zero) labels**: the timeout class ``0`` is **held out** of the directional score, not
+    treated as a discriminable third class (i.e. *not* macro one-vs-rest AUC). Rationale — the
+    base strategy is directional (which barrier resolves first); a timeout is an *abstain* /
+    "no clean move" outcome, and the trade-vs-no-trade decision is a separate meta-labelling
+    problem (Phase 2), not part of the directional discrimination the barrier trades on.
+    Consequence: ~21% of labels (the timeouts) do not enter the score; when meta-labelling
+    lands, the timeout class gets its own gate rather than being folded into the AUC here.
+
 The multiple-testing machinery (DSR/PBO), the lockbox, and the metric-module import boundary
 are added in later build steps; this is the smallest substrate the leak canaries run through.
 """

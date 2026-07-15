@@ -114,14 +114,33 @@ Module 5 is **not done** until all of these pass in CI (leakage tests are code, 
     sample-uniqueness weighting on, a label shuffle can still read slightly above chance because
     the concurrency structure survives the shuffle — that is expected, **not** a framework bug, so
     the criterion is "≈ 0.5 within tolerance", not "exactly 0.5".
-  - **Time-order shuffle** (break the sequence): the leak-sensitive path must show **no
-    improvement**, proving the CV machinery is not leaking through ordering (purge/embargo, fold
-    construction). This targets ordering leaks, which the label shuffle cannot see.
+  - **Time-order shuffle** (break the sequence, keep each X↔y pair intact): a genuine
+    cross-sectional edge is a within-sample relationship and **survives** this shuffle unchanged;
+    an *ordering* leak (purge/embargo overlap, a feature peeking at an adjacent bar) is carried by
+    temporal adjacency and **vanishes** when the sequence is scrambled. So the criterion is
+    *differential*: the leak-sensitive path must **lose its lift** while a true-edge control path
+    **keeps** it. This targets ordering leaks, which the label shuffle cannot see.
+
+**Why the separation must be structural, not a magnitude threshold (review 2026-07-14).** The
+graded canary measured the framework's resolution limit: at n≈8k the smallest leak-correlation it
+can lift above the 2σ noise band is ρ≈0.05, and the limit falls as 1/√n — on the real ≈3.6M-row
+dataset it reaches ρ≈0.001. Real intraday edges live at ρ≈0.05–0.20. **Therefore a subtle leak and
+a genuine edge produce the *same* AUC** — both sit tens of σ above the band. It follows that the
+leakage suite **cannot** use "AUC above the noise band" to decide leak-vs-edge; that test fires
+identically for both and is worthless as a discriminator. Separation is instead **structural**:
+(i) *correct purging/embargo* removes the overlap that carries most look-ahead leaks (test c is the
+guarantee, not a hope); and (ii) the *time-order shuffle* is differential — an edge is invariant to
+it, an ordering leak collapses under it. The magnitude of the score is used only to confirm a
+*known* leak is caught (the canary) and to size effects downstream (DSR/PBO); it is never the thing
+that certifies a novel signal is clean. Any test whose pass/fail depends on the AUC level rather
+than on a structural invariant (shuffle response, purge count) is a bug in the gate.
+
 - **(e) Planted-leak canary** — inject a deliberately leaking feature (a copy of the label) and
   assert the framework **flags** it: the raw in-sample metric spikes while the machinery still
   runs, proving the suite can catch a *known* leak. A framework that cannot detect a planted leak
   cannot be trusted to clear an unplanted one — the canary is the meta-gate, and it must pass
-  before the first real model is ever scored.
+  before the first real model is ever scored. Note this is the *only* legitimate use of score
+  magnitude in the gate: confirming a leak we planted, never certifying a signal we didn't.
 
 ### Reserved / dependencies
 
