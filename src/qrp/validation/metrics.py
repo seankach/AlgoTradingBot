@@ -34,6 +34,29 @@ def auc(actual_positive: _Bool, score: _F64) -> float:
     return float((ranks[actual_positive].sum() - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg))
 
 
+def weighted_auc(actual_positive: _Bool, score: _F64, weight: _F64) -> float:
+    """Sample-weighted AUC — the weighted Mann-Whitney statistic (CLAUDE.md §7).
+
+    Equal to :func:`auc` when all weights are equal. Weighting downweights overlapping (redundant)
+    labels so the score reflects the *effective* sample, not the row count. Ties split at 0.5.
+    Returns ``nan`` if either class has zero total weight.
+    """
+    w_pos = float(weight[actual_positive].sum())
+    w_neg = float(weight[~actual_positive].sum())
+    if w_pos == 0.0 or w_neg == 0.0:
+        return float("nan")
+    order = np.argsort(score, kind="mergesort")
+    s, pos, w = score[order], actual_positive[order], weight[order]
+    neg_w = w * ~pos
+    _, inv = np.unique(s, return_inverse=True)
+    grp_neg = np.zeros(int(inv.max()) + 1, dtype=np.float64)
+    np.add.at(grp_neg, inv, neg_w)
+    neg_below = np.concatenate([[0.0], np.cumsum(grp_neg)[:-1]])[inv]  # neg weight strictly below
+    neg_tie = grp_neg[inv]  # neg weight at the same score
+    contrib = (w * pos) * (neg_below + 0.5 * neg_tie)
+    return float(contrib.sum() / (w_pos * w_neg))
+
+
 def balanced_accuracy(actual_positive: _Bool, predicted_positive: _Bool) -> float:
     """Mean of per-class recall — 0.5 under chance regardless of class balance."""
     tp = int((predicted_positive & actual_positive).sum())

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
 import numpy as np
@@ -33,10 +34,13 @@ import polars as pl
 
 from qrp.validation.leakage import assert_features_are_not_outcomes
 from qrp.validation.lockbox import Lockbox
-from qrp.validation.metrics import auc, balanced_accuracy
+from qrp.validation.metrics import balanced_accuracy, weighted_auc
 from qrp.validation.splits import PurgedCPCV
+from qrp.validation.trials import Trial, TrialSpec, TrialStore
+from qrp.validation.weights import uniqueness_weights
 
 _F64 = npt.NDArray[np.float64]
+_I64 = npt.NDArray[np.int64]
 
 
 @dataclass(frozen=True)
@@ -93,11 +97,23 @@ class CorrelationSignModel:
         return result
 
 
-class Study:
-    """Runs a model over the CPCV splits and returns aggregated out-of-fold metrics."""
+def _epoch_us(frame: pl.DataFrame, column: str) -> _I64:
+    result: _I64 = frame.get_column(column).dt.epoch(time_unit="us").to_numpy().astype(np.int64)
+    return result
 
-    def __init__(self, splitter: PurgedCPCV) -> None:
+
+class Study:
+    """Runs a model over the CPCV splits and returns aggregated out-of-fold metrics.
+
+    Sample-uniqueness weighting is ON (CLAUDE.md §7): overlapping labels are downweighted in both
+    the fit and the AUC aggregation, so the effective sample — not the row count — drives it. If
+    a ``trial_store`` is given, every ``run`` registers the trial it scores, so the count that
+    deflates PBO / auc_deflation cannot silently miss a config that was tried (ADR-0010).
+    """
+
+    def __init__(self, splitter: PurgedCPCV, *, trial_store: TrialStore | None = None) -> None:
         self._splitter = splitter
+        self._trial_store = trial_store
 
     def run(
         self,
@@ -107,18 +123,25 @@ class Study:
         feature_columns: list[str],
         h_bars: int,
         label_column: str = "label",
+        trial: TrialSpec | None = None,
     ) -> StudyResult:
         """Score ``model`` over every CPCV path and return the aggregated metrics.
 
         The dataset is sorted by ``decision_ts`` so split indices align with the arrays. Only
         non-zero labels are scored (the directional up/down question). This is the only place a
-        number is produced (ADR-0009), so the label/outcome boundary guard (§7-b) fires here.
+        number is produced (ADR-0009), so the label/outcome boundary guard (§7-b) fires here, and —
+        if ``trial`` and a ``trial_store`` are set — the trial is registered against its OOS AUC.
         """
         assert_features_are_not_outcomes(feature_columns)
         ordered = dataset.sort("decision_ts")
         labels = ordered.select("decision_ts", "entry_ts", "exit_ts")
         x = ordered.select(feature_columns).to_numpy().astype(np.float64)
         y = ordered.get_column(label_column).to_numpy().astype(np.float64)
+        weights = uniqueness_weights(
+            _epoch_us(labels, "decision_ts"),
+            _epoch_us(labels, "entry_ts"),
+            _epoch_us(labels, "exit_ts"),
+        )
 
         aucs: list[float] = []
         baccs: list[float] = []
@@ -126,7 +149,7 @@ class Study:
         for train_idx, test_idx in self._splitter.split(labels, h_bars=h_bars):
             if train_idx.size == 0 or test_idx.size == 0:
                 continue
-            fitted = model.fit(x[train_idx], y[train_idx], np.ones(train_idx.size))
+            fitted = model.fit(x[train_idx], y[train_idx], weights[train_idx])
             score = fitted.predict(x[test_idx])
             actual = y[test_idx]
             scored = actual != 0
@@ -134,18 +157,30 @@ class Study:
                 continue
             positive = actual[scored] > 0
             fold_score = score[scored]
-            fold_auc = auc(positive, fold_score)
+            fold_w = weights[test_idx][scored]
+            fold_auc = weighted_auc(positive, fold_score, fold_w)
             if not math.isnan(fold_auc):
                 aucs.append(fold_auc)
             baccs.append(balanced_accuracy(positive, fold_score > 0))
             accs.append(float(np.mean((fold_score > 0) == positive)))
 
-        return StudyResult(
+        result = StudyResult(
             auc=float(np.mean(aucs)) if aucs else float("nan"),
             balanced_accuracy=float(np.mean(baccs)) if baccs else float("nan"),
             accuracy=float(np.mean(accs)) if accs else float("nan"),
             n_paths=len(accs),
         )
+        if self._trial_store is not None and trial is not None:
+            self._trial_store.register(
+                Trial(
+                    trial_hash=trial.hash(),
+                    dataset_id=trial.dataset_id,
+                    model_class=trial.model_class,
+                    auc=result.auc,
+                    registered_at=datetime.now(UTC),
+                )
+            )
+        return result
 
     def block_aucs(
         self,
@@ -168,6 +203,11 @@ class Study:
         labels = ordered.select("decision_ts", "entry_ts", "exit_ts")
         x = ordered.select(feature_columns).to_numpy().astype(np.float64)
         y = ordered.get_column(label_column).to_numpy().astype(np.float64)
+        weights = uniqueness_weights(
+            _epoch_us(labels, "decision_ts"),
+            _epoch_us(labels, "entry_ts"),
+            _epoch_us(labels, "exit_ts"),
+        )
 
         splitter = PurgedCPCV(n_groups=n_blocks, k_test_groups=1)
         out: list[float] = []
@@ -175,14 +215,14 @@ class Study:
             if train_idx.size == 0 or test_idx.size == 0:
                 out.append(float("nan"))
                 continue
-            fitted = model.fit(x[train_idx], y[train_idx], np.ones(train_idx.size))
+            fitted = model.fit(x[train_idx], y[train_idx], weights[train_idx])
             score = fitted.predict(x[test_idx])
             actual = y[test_idx]
             scored = actual != 0
             if scored.sum() < 2:
                 out.append(float("nan"))
                 continue
-            out.append(auc(actual[scored] > 0, score[scored]))
+            out.append(weighted_auc(actual[scored] > 0, score[scored], weights[test_idx][scored]))
         return np.asarray(out, dtype=np.float64)
 
     def evaluate_lockbox(

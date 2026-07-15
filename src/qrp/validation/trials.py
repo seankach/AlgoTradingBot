@@ -65,6 +65,31 @@ def trial_hash(
 
 
 @dataclass(frozen=True)
+class TrialSpec:
+    """The identity of a configuration to be scored — everything that can change the OOS number.
+
+    Passed to ``Study.run`` so the choke point can register the trial as it scores it. A new spec
+    (any field differs) is a new bet; an identical spec re-run is idempotent (I6).
+    """
+
+    dataset_id: str
+    model_class: str
+    hyperparameters: Mapping[str, object]
+    feature_spec_version: str
+    label_spec_version: str
+
+    def hash(self) -> str:
+        """The content hash that identifies this trial in the registry."""
+        return trial_hash(
+            dataset_id=self.dataset_id,
+            model_class=self.model_class,
+            hyperparameters=self.hyperparameters,
+            feature_spec_version=self.feature_spec_version,
+            label_spec_version=self.label_spec_version,
+        )
+
+
+@dataclass(frozen=True)
 class Trial:
     """One registered configuration and the aggregate score it produced."""
 

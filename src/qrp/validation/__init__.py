@@ -57,9 +57,11 @@ from qrp.validation.trials import (
     InMemoryTrialStore,
     PostgresTrialStore,
     Trial,
+    TrialSpec,
     TrialStore,
     trial_hash,
 )
+from qrp.validation.weights import uniqueness_weights
 
 __all__ = [
     "DEFAULT_PBO_BLOCKS",
@@ -82,6 +84,7 @@ __all__ = [
     "Study",
     "StudyResult",
     "Trial",
+    "TrialSpec",
     "TrialStore",
     "ValidatedBarStore",
     "ValidatedBuildManifest",
@@ -107,5 +110,6 @@ __all__ = [
     "shuffle_labels_block",
     "shuffle_time_order",
     "trial_hash",
+    "uniqueness_weights",
     "validated_frame",
 ]
