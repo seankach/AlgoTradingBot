@@ -115,6 +115,39 @@ silent-discontinuity failure already flagged for the 3-class scoring (binary sig
 OVR-AUC): a name that stays the same while the thing underneath changes. The distinct name is the
 guard; this paragraph is the record so no one "unifies" them later.
 
+#### 3a. The full shuffle is the correct null for Phase-3 models; the block shuffle is dormant (measured)
+
+The full-shuffle null above destroys label autocorrelation as well as the feature→label tie. A fair
+question (raised in review) is whether it therefore certifies **autocorrelation-riding** as skill.
+We settled it by **measurement, not argument** (2026-07-15), and the answer shaped the design:
+
+- **On the real lake, a maximally-overfit 1-NN memoriser scores OOS AUC ≈ 0.51.** Its full-shuffle
+  null is ≈ 0.50, so the deflation certifies it. We investigated: the 0.51 is a weak **return-feature**
+  edge (dropping the volatility features leaves it unchanged; vol-only scores *below* chance), **not**
+  rediscovered lag-1 label autocorrelation — that autocorrelation (0.64 at lag 1) is *within* the
+  purge horizon and correctly removed; had purge leaked it, the memoriser would score ~0.6+, not 0.51.
+  So the deflation was **correct**: it flagged a weak real cross-sectional signal.
+- **The block shuffle cannot catch this, by construction, and the data confirms it.** A cross-sectional
+  model's edge is a per-row feature→label tie; *any* label shuffle — full or block — breaks it. We
+  measured the memoriser's block-shuffle null at block lengths `H, 5H, 10H, 20H, 40H`: **all ≈ 0.50,
+  identical to the full-shuffle null, at every length.** The block shuffle is therefore **inert for
+  every cross-sectional model, which is every model in Phase 3** (GBMs). For those, the four guards —
+  PIT (no look-ahead), purge (no overlap), full-shuffle deflation (above noise), PBO (not
+  selection-overfit) — are complete and correct.
+- **The block shuffle bites only a model that reads label *temporal order* (a sequence model)** — which
+  the `Model` protocol cannot yet express. So it stays **dormant** (its ADR-0009 filing was right, and
+  this measurement is the *why* behind it), but it is now **built and tested**, not just filed: a
+  deliberate temporal adversary (predict a test label from the temporally-nearest training label, on
+  long-range-autocorrelated labels) is **certified by the full shuffle (deflation ≈ 1 — the blind
+  spot) and rejected by the block shuffle (deflation ≈ 0)**, while a genuine cross-sectional edge at
+  equal magnitude **passes** the block shuffle. Block length is stated as a function of `H` (like purge
+  and embargo): it must exceed the autocorrelation decay (~`H`); the acceptance test pins that at
+  block `= H` the adversary is *not* rejected (degraded to a full shuffle) and at `10*H` it is.
+
+The lesson for Phase 3: **do not reach for the block shuffle when a GBM shows AUC 0.53** — it cannot
+tell you anything a full shuffle can't. It arms only when a sequence model enters, and its acceptance
+test is ready for that day.
+
 ### 4. Where the trial count comes from — the number that drives both
 
 Both PBO (the `N` axis) and `auc_deflation` (the `K`) are only as honest as the trial count, so it is

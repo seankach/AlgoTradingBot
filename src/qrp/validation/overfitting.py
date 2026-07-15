@@ -132,6 +132,58 @@ def permutation_null(
     return np.asarray(nulls, dtype=np.float64)
 
 
+def block_bars_for_horizon(h_bars: int, *, multiple: int = 10) -> int:
+    """Block length for the block-shuffle null, stated as a function of ``H`` (review 2026-07-15).
+
+    The block must be **longer than the label autocorrelation decay** — which is on the order of the
+    horizon ``H`` — or short blocks destroy the very structure they exist to preserve and the block
+    shuffle degrades into a full shuffle in disguise (measured: at block ``= H`` the temporal
+    adversary is *not* rejected, at ``10*H`` it is). Ten horizons is the validated default.
+    """
+    return multiple * h_bars
+
+
+def permutation_null_block(
+    study: Study,
+    dataset: pl.DataFrame,
+    model: Model,
+    *,
+    feature_columns: list[str],
+    h_bars: int,
+    n_permutations: int,
+    block_bars: int,
+    label_column: str = "label",
+    seed: int = 0,
+) -> _F64:
+    """The AUC null under a **block** label shuffle — preserves within-block autocorrelation.
+
+    Tested-but-**dormant** (ADR-0009 block-shuffle filing; ADR-0010). Unlike the full shuffle, this
+    keeps the label autocorrelation *inside* each block of ``block_bars`` while breaking it across
+    blocks, so a model that rides label temporal structure still scores high on the null (→
+    rejected) while a genuine cross-sectional edge collapses on the null (→ passed). It has **no
+    effect on a cross-sectional model** — any label shuffle breaks that model's feature→label tie —
+    which is why it is inert for every Phase-3 model and only bites a sequence model. ``block_bars``
+    must exceed the autocorrelation decay (see :func:`block_bars_for_horizon`).
+    """
+    from qrp.validation.leakage import shuffle_labels_block
+
+    nulls: list[float] = []
+    for b in range(n_permutations):
+        shuffled = shuffle_labels_block(
+            dataset, seed=seed * 1_000_003 + b, block_size=block_bars, label_column=label_column
+        )
+        result = study.run(
+            shuffled,
+            model,
+            feature_columns=feature_columns,
+            h_bars=h_bars,
+            label_column=label_column,
+        )
+        if not math.isnan(result.auc):
+            nulls.append(result.auc)
+    return np.asarray(nulls, dtype=np.float64)
+
+
 def auc_deflation(
     study: Study,
     dataset: pl.DataFrame,
@@ -142,23 +194,41 @@ def auc_deflation(
     feature_columns: list[str],
     h_bars: int,
     n_permutations: int = 200,
+    block_bars: int | None = None,
     label_column: str = "label",
     seed: int = 0,
 ) -> float:
     """Deflate ``observed_auc`` against a permutation null over ``n_trials`` trials (ADR-0010 §3).
 
-    Builds the null with :func:`permutation_null`, then returns
-    :func:`deflated_probability`. This is **not** a DSR: it is a deflation on the AUC statistic
-    against its own measured null, and is not comparable to a Phase-5 returns-series DSR.
+    With ``block_bars=None`` (default) the null is the **full** label shuffle
+    (:func:`permutation_null`) — the correct and complete guard for the cross-sectional models of
+    Phase 3. Passing ``block_bars`` switches to the **block** shuffle
+    (:func:`permutation_null_block`), the tested-but-dormant guard that only bites a model reading
+    label temporal order (a sequence model); it is a no-op for cross-sectional models. Returns
+    :func:`deflated_probability`. This is **not** a DSR — it is a deflation on the AUC statistic
+    against its own measured null, not comparable to a Phase-5 returns-series DSR.
     """
-    null = permutation_null(
-        study,
-        dataset,
-        model,
-        feature_columns=feature_columns,
-        h_bars=h_bars,
-        n_permutations=n_permutations,
-        label_column=label_column,
-        seed=seed,
-    )
+    if block_bars is None:
+        null = permutation_null(
+            study,
+            dataset,
+            model,
+            feature_columns=feature_columns,
+            h_bars=h_bars,
+            n_permutations=n_permutations,
+            label_column=label_column,
+            seed=seed,
+        )
+    else:
+        null = permutation_null_block(
+            study,
+            dataset,
+            model,
+            feature_columns=feature_columns,
+            h_bars=h_bars,
+            n_permutations=n_permutations,
+            block_bars=block_bars,
+            label_column=label_column,
+            seed=seed,
+        )
     return deflated_probability(observed_auc, null, n_trials)

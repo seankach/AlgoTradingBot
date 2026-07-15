@@ -36,9 +36,11 @@ from qrp.validation.lockbox import (
 from qrp.validation.overfitting import (
     DEFAULT_PBO_BLOCKS,
     auc_deflation,
+    block_bars_for_horizon,
     deflated_probability,
     pbo,
     permutation_null,
+    permutation_null_block,
 )
 from qrp.validation.quality import flag_quality
 from qrp.validation.session_index import (
@@ -89,6 +91,7 @@ __all__ = [
     "attach_bars",
     "auc_deflation",
     "bars_to_frame",
+    "block_bars_for_horizon",
     "build_and_store",
     "build_session_index",
     "build_validated_bars",
@@ -98,6 +101,7 @@ __all__ = [
     "load_series_frames",
     "pbo",
     "permutation_null",
+    "permutation_null_block",
     "purged_train_mask",
     "shuffle_labels",
     "shuffle_labels_block",

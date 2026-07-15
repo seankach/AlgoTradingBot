@@ -202,7 +202,8 @@ def test_time_order_shuffle_is_dormant_by_design() -> None:
 
 @pytest.mark.skip(
     reason="Block-shuffle discrimination is DORMANT until a sequence model exists (Phase 3+). "
-    "Filed so the crossover reasoning is not rediscovered from scratch."
+    "The block-shuffle NULL is now built + validated in test_block_shuffle_acceptance.py against a "
+    "temporal adversary; this leakage-suite variant still waits on a real sequence model."
 )
 def test_block_shuffle_discriminates_sequence_edge_from_leak() -> None:
     """Second dormant tripwire — the mirror of the full-vs-frozen crossover (review 2026-07-15).
