@@ -25,10 +25,16 @@ from qrp.validation.session_index import (
     validated_frame,
 )
 from qrp.validation.sessions import SessionTagger
+from qrp.validation.splits import PurgedCPCV, purged_train_mask
+from qrp.validation.study import CorrelationSignModel, Model, Study
 
 __all__ = [
+    "CorrelationSignModel",
+    "Model",
+    "PurgedCPCV",
     "SessionTagger",
     "SnapshotConflictError",
+    "Study",
     "ValidatedBarStore",
     "ValidatedBuildManifest",
     "assemble_validated",
@@ -41,5 +47,6 @@ __all__ = [
     "find_conflicts",
     "flag_quality",
     "load_series_frames",
+    "purged_train_mask",
     "validated_frame",
 ]
