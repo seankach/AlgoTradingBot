@@ -33,3 +33,4 @@ approval**. Do not build on an unapproved decision. Once approved, set the statu
 | [0006](0006-feature-store-interface-and-point-in-time-contract.md) | Feature store: interface, point-in-time contract, initial feature spec | Accepted |
 | [0007](0007-triple-barrier-label-spec-and-barrier-volatility.md) | Triple-barrier label spec, exit-policy unity, and barrier volatility | Accepted |
 | [0008](0008-pit-and-horizon-corrections-from-review.md) | Point-in-time, horizon, and tie-break corrections (external review) | Accepted |
+| [0009](0009-validation-framework-cpcv-study-lockbox-leakage-gate.md) | Validation framework: CPCV, the Study choke point, lockbox, and the leakage gate | Proposed |
