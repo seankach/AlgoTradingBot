@@ -1,9 +1,14 @@
-"""Study — the only path to a metric (ADR-0009). Minimal scoring path (build step 2).
+"""Study — the only path to a metric (ADR-0009). Minimal scoring path (build step 2/3).
 
-At this stage ``Study.run`` turns ``(dataset, model)`` into a single out-of-fold score over the
-CPCV splits. The multiple-testing machinery (deflated Sharpe, PBO), the lockbox, and the
-metric-module import boundary are added in later build steps; this is deliberately the smallest
-substrate the planted-leak canary (step 3) can run through.
+``Study.run`` turns ``(dataset, model)`` into a :class:`StudyResult` over the CPCV splits. The
+**primary metric is AUC** — imbalance-robust and centred on 0.5 under chance — with balanced
+accuracy alongside it; raw directional accuracy is kept only as a *diagnostic*, because under
+class imbalance it rewards majority-class prediction rather than signal (review 2026-07-14).
+When models emit calibrated probabilities (Phase 3/8), a proper scoring rule (log-loss / Brier)
+becomes the number the deflated Sharpe is computed on; that is noted and deferred.
+
+The multiple-testing machinery (DSR/PBO), the lockbox, and the metric-module import boundary
+are added in later build steps; this is the smallest substrate the leak canaries run through.
 """
 
 from __future__ import annotations
@@ -15,10 +20,46 @@ from typing import Protocol, runtime_checkable
 import numpy as np
 import numpy.typing as npt
 import polars as pl
+from scipy.stats import rankdata
 
 from qrp.validation.splits import PurgedCPCV
 
 _F64 = npt.NDArray[np.float64]
+_Bool = npt.NDArray[np.bool_]
+
+
+@dataclass(frozen=True)
+class StudyResult:
+    """Out-of-fold scores aggregated across the CPCV paths."""
+
+    auc: float  # primary: imbalance-robust, 0.5 = chance
+    balanced_accuracy: float  # imbalance-robust
+    accuracy: float  # DIAGNOSTIC ONLY — majority-class-biased under imbalance
+    n_paths: int
+
+
+def auc(actual_positive: _Bool, score: _F64) -> float:
+    """Area under the ROC curve (Mann-Whitney), with average ranks for ties.
+
+    ``0.5`` is chance regardless of class balance. Returns ``nan`` if a class is absent.
+    """
+    n_pos = int(actual_positive.sum())
+    n_neg = int((~actual_positive).sum())
+    if n_pos == 0 or n_neg == 0:
+        return float("nan")
+    ranks = rankdata(score)  # average ranks, 1-based
+    return float((ranks[actual_positive].sum() - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg))
+
+
+def balanced_accuracy(actual_positive: _Bool, predicted_positive: _Bool) -> float:
+    """Mean of per-class recall — 0.5 under chance regardless of class balance."""
+    tp = int((predicted_positive & actual_positive).sum())
+    fn = int((~predicted_positive & actual_positive).sum())
+    tn = int((~predicted_positive & ~actual_positive).sum())
+    fp = int((predicted_positive & ~actual_positive).sum())
+    recall_pos = tp / (tp + fn) if (tp + fn) else float("nan")
+    recall_neg = tn / (tn + fp) if (tn + fp) else float("nan")
+    return float((recall_pos + recall_neg) / 2)
 
 
 @runtime_checkable
@@ -30,16 +71,17 @@ class Model(Protocol):
         ...
 
     def predict(self, x: _F64) -> _F64:
-        """Return a real-valued prediction per row (sign gives the direction)."""
+        """Return a real-valued score per row (higher = more likely the positive class)."""
         ...
 
 
 @dataclass(frozen=True)
 class CorrelationSignModel:
-    """Reference baseline: predict the sign of the single most label-correlated feature.
+    """Reference baseline: score by the single most label-correlated feature.
 
     Minimal by design — enough to demonstrate a leak (a feature equal to the label is picked and
-    predicted perfectly) and to sit at chance otherwise. Not a trading model.
+    scores perfectly) and to sit at chance otherwise. Not a trading model. Emits a *continuous*
+    score (the signed feature value) so AUC is meaningful.
     """
 
     best: int = -1
@@ -59,14 +101,13 @@ class CorrelationSignModel:
         return CorrelationSignModel(best=best, sign=best_sign)
 
     def predict(self, x: _F64) -> _F64:
-        """Predict the (signed) direction from the selected feature."""
-        column = np.nan_to_num(x, nan=0.0)[:, self.best]
-        result: _F64 = (self.sign * np.sign(column)).astype(np.float64)
+        """Score by the signed value of the selected feature (continuous)."""
+        result: _F64 = (self.sign * np.nan_to_num(x, nan=0.0)[:, self.best]).astype(np.float64)
         return result
 
 
 class Study:
-    """Runs a model over the CPCV splits and returns a single out-of-fold score."""
+    """Runs a model over the CPCV splits and returns aggregated out-of-fold metrics."""
 
     def __init__(self, splitter: PurgedCPCV) -> None:
         self._splitter = splitter
@@ -79,26 +120,41 @@ class Study:
         feature_columns: list[str],
         h_bars: int,
         label_column: str = "label",
-    ) -> float:
-        """Return the mean per-split directional accuracy on non-zero labels.
+    ) -> StudyResult:
+        """Score ``model`` over every CPCV path and return the aggregated metrics.
 
-        The dataset is sorted by ``decision_ts`` so the split indices align with the feature and
-        label arrays. This is the only place a number is produced (ADR-0009).
+        The dataset is sorted by ``decision_ts`` so split indices align with the arrays. Only
+        non-zero labels are scored (the directional up/down question). This is the only place a
+        number is produced (ADR-0009).
         """
         ordered = dataset.sort("decision_ts")
         labels = ordered.select("decision_ts", "entry_ts", "exit_ts")
         x = ordered.select(feature_columns).to_numpy().astype(np.float64)
         y = ordered.get_column(label_column).to_numpy().astype(np.float64)
 
-        scores: list[float] = []
+        aucs: list[float] = []
+        baccs: list[float] = []
+        accs: list[float] = []
         for train_idx, test_idx in self._splitter.split(labels, h_bars=h_bars):
             if train_idx.size == 0 or test_idx.size == 0:
                 continue
             fitted = model.fit(x[train_idx], y[train_idx], np.ones(train_idx.size))
-            prediction = np.sign(fitted.predict(x[test_idx]))
-            actual = np.sign(y[test_idx])
+            score = fitted.predict(x[test_idx])
+            actual = y[test_idx]
             scored = actual != 0
-            if not scored.any():
+            if scored.sum() < 2:
                 continue
-            scores.append(float(np.mean(prediction[scored] == actual[scored])))
-        return float(np.mean(scores)) if scores else float("nan")
+            positive = actual[scored] > 0
+            fold_score = score[scored]
+            fold_auc = auc(positive, fold_score)
+            if not math.isnan(fold_auc):
+                aucs.append(fold_auc)
+            baccs.append(balanced_accuracy(positive, fold_score > 0))
+            accs.append(float(np.mean((fold_score > 0) == positive)))
+
+        return StudyResult(
+            auc=float(np.mean(aucs)) if aucs else float("nan"),
+            balanced_accuracy=float(np.mean(baccs)) if baccs else float("nan"),
+            accuracy=float(np.mean(accs)) if accs else float("nan"),
+            n_paths=len(accs),
+        )

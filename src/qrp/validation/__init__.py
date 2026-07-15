@@ -26,7 +26,7 @@ from qrp.validation.session_index import (
 )
 from qrp.validation.sessions import SessionTagger
 from qrp.validation.splits import PurgedCPCV, purged_train_mask
-from qrp.validation.study import CorrelationSignModel, Model, Study
+from qrp.validation.study import CorrelationSignModel, Model, Study, StudyResult
 
 __all__ = [
     "CorrelationSignModel",
@@ -35,6 +35,7 @@ __all__ = [
     "SessionTagger",
     "SnapshotConflictError",
     "Study",
+    "StudyResult",
     "ValidatedBarStore",
     "ValidatedBuildManifest",
     "assemble_validated",

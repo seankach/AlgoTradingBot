@@ -19,6 +19,8 @@ dependencies = [
     "polars>=1.0",
     # Exchange session boundaries — a first-class dependency, not a helper (§4, §5).
     "exchange_calendars>=4.5",
+    # Validation-framework statistics: AUC ranks now, deflated Sharpe / PBO later (ADR-0009).
+    "scipy>=1.11",
 ]
 
 # PEP 735 dependency group. Installed with `uv sync` (default), excluded from the
@@ -107,7 +109,7 @@ warn_required_dynamic_aliases = true
 # boundary in qrp.validation.sessions and its outputs are immediately converted to plain
 # datetimes / Polars.
 [[tool.mypy.overrides]]
-module = ["exchange_calendars.*"]
+module = ["exchange_calendars.*", "scipy.*"]
 ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------
