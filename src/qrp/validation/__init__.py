@@ -24,6 +24,15 @@ from qrp.validation.leakage import (
     shuffle_labels_block,
     shuffle_time_order,
 )
+from qrp.validation.lockbox import (
+    InMemoryLockboxStore,
+    Lockbox,
+    LockboxBurnedError,
+    LockboxError,
+    LockboxStore,
+    LockboxTouch,
+    PostgresLockboxStore,
+)
 from qrp.validation.quality import flag_quality
 from qrp.validation.session_index import (
     attach_bars,
@@ -37,8 +46,15 @@ from qrp.validation.study import CorrelationSignModel, Model, Study, StudyResult
 
 __all__ = [
     "CorrelationSignModel",
+    "InMemoryLockboxStore",
     "LeakageError",
+    "Lockbox",
+    "LockboxBurnedError",
+    "LockboxError",
+    "LockboxStore",
+    "LockboxTouch",
     "Model",
+    "PostgresLockboxStore",
     "PurgedCPCV",
     "SessionTagger",
     "SnapshotConflictError",

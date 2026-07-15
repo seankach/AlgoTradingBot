@@ -33,6 +33,7 @@ import polars as pl
 from scipy.stats import rankdata
 
 from qrp.validation.leakage import assert_features_are_not_outcomes
+from qrp.validation.lockbox import Lockbox
 from qrp.validation.splits import PurgedCPCV
 
 _F64 = npt.NDArray[np.float64]
@@ -169,4 +170,30 @@ class Study:
             balanced_accuracy=float(np.mean(baccs)) if baccs else float("nan"),
             accuracy=float(np.mean(accs)) if accs else float("nan"),
             n_paths=len(accs),
+        )
+
+    def evaluate_lockbox(
+        self,
+        dataset: pl.DataFrame,
+        model: Model,
+        *,
+        lockbox: Lockbox,
+        justification: str,
+        feature_columns: list[str],
+        h_bars: int,
+        label_column: str = "label",
+    ) -> StudyResult:
+        """Score the lockbox out-of-sample range — the **only** path that may touch it (I5).
+
+        Records the touch *before* scoring, so a look costs a touch whether or not the evaluation
+        then succeeds. Raises (without scoring) if the lockbox is burned or the justification is
+        blank; see :meth:`qrp.validation.lockbox.Lockbox.touch`.
+        """
+        lockbox.touch(justification)
+        return self.run(
+            dataset,
+            model,
+            feature_columns=feature_columns,
+            h_bars=h_bars,
+            label_column=label_column,
         )

@@ -61,11 +61,41 @@ build_and_store(snapshots, ValidatedBarStore(cfg.storage), SessionTagger(),
 frame = ValidatedBarStore(cfg.storage).read("TSLA")
 ```
 
+### Validation framework (Module 5, ADR-0009)
+
+`Study` is the **only** path to a metric; `PurgedCPCV` derives purge/embargo from the label
+lifespans; the leakage suite and the lockbox are load-bearing CI contracts (§9).
+
+```python
+from qrp.validation import (
+    PurgedCPCV, Study, Lockbox, InMemoryLockboxStore, assert_features_are_not_outcomes,
+)
+study = Study(PurgedCPCV(n_groups=6, k_test_groups=2))       # 15 CPCV paths
+result = study.run(dataset, model, feature_columns=[...], h_bars=30)   # -> StudyResult (AUC ...)
+
+# The lockbox: at most 2 touches for the whole project (I5), enforced by code, not memory.
+box = Lockbox(store, dataset_id=did, git_sha=sha)            # store: In-memory or Postgres
+result = study.evaluate_lockbox(dataset, model, lockbox=box, justification="baseline OOS",
+                                feature_columns=[...], h_bars=30)      # the ONLY lockbox path
+```
+
+Scoring scheme: **binary sign-AUC over the resolved (non-zero) labels** — the timeout class is held
+out (not macro OVR-AUC). Leakage separation is **structural**, not by score magnitude: a subtle leak
+and a real edge produce the same AUC, so each §7 test sits at the layer its leak enters (PIT /
+purge / label-shuffle), and the time-order and block-label shuffles are **dormant tripwires** that
+arm once a cross-sample (sequence) model exists (Phase 3+).
+
 ## Testing strategy
 
 `tests/validation/test_validation.py`: conflict detection + raise; session tags for each of
 PRE/RTH/POST/OVERNIGHT and a weekend against the real calendar; index completeness with
 untraded minutes kept null; and gap/halt/zero-volume/price-anomaly flags.
+
+`test_cpcv.py` / `test_metrics.py` / `test_study_canary.py`: exact purge boundary, imbalance-robust
+metrics, and the planted-leak + graded canaries (resolution limit ρ≈0.05 at n=8k). `test_leakage_
+suite.py`: the four §7 tests + the dormant shuffles. `test_lockbox.py`: the **third** touch raises
+(and does not increment), blank justifications are refused, and the counter is the append-only row
+count. The Postgres store has a roundtrip test skipped unless `QRP_LOCKBOX_TEST_DSN` is set.
 
 ## Extension points
 
