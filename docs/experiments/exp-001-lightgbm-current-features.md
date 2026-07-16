@@ -85,6 +85,29 @@ Read on the best config's deflation (charged for K=12):
 
 ---
 
-## Results (appended after the run — empty until then)
+## Results (appended after the run — 2026-07-15)
 
-_pending_
+Ran once, exactly as registered. 77,661 rows (stride 15), K=12 trials registered.
+
+- **All 12 configs cluster tightly:** weighted AUC **0.5250 – 0.5289** — the signal is in the
+  *features*, robust to every hyperparameter in the grid, not a config artifact.
+- **Best:** wAUC **0.5289** (`num_leaves=31, learning_rate=0.03, min_child_samples=200`).
+- **Deflation (K=12, B=300):** **1.0000 at all three seeds**, seed-spread **0.0000** (stable). The
+  best AUC is above *all* 300 permutation nulls at every seed — a ~5–6σ separation at this effective
+  n, so charging for the 12-way search does not touch it.
+
+**VERDICT (by the pre-registered rule): a weak but real directional edge survives the 12-way search
+→ next gate: cost analysis (Phase 5).**
+
+**Reading it honestly.** This is *not* "no edge" — there is a deflation-surviving directional signal.
+But "survives deflation" means *statistically distinguishable from noise*, not *economically useful*:
+0.529 AUC is a **small** edge, and at 74k effective n a small edge is easily ~5σ real while being
+marginal to trade. The tight cluster across all 12 configs says two things at once — the edge is
+robust (good) and it is a **feature ceiling** (sobering): more hyperparameter tuning will not move it.
+The number is consistent with the ~0.51 return-feature edge seen independently by the memoriser and
+the RTH LightGBM smoke test; the all-session span reads slightly higher (0.529).
+
+**This tested direction only.** Whether 0.529 AUC beats half-spread + commissions at 1×/2×/3× costs
+is the real question and is Phase 5. The honest expectation remains that a directional edge this weak
+may not survive costs — and that finding, when it comes, is also a real answer. Next step is the
+cost gate on this edge, *not* a wider grid or a nudged label (foreclosed by pre-registration).
