@@ -87,6 +87,8 @@ ban-relative-imports = "all"
 # Tests do not require docstrings or full annotations; fakes mirror ib_async's
 # camelCase names on purpose (N802/N803/N815).
 "tests/**" = ["D", "ANN", "S101", "N802", "N803", "N815"]
+# Pre-registered experiment runners are research scripts, not library code.
+"experiments/**" = ["D", "ANN"]
 # The IBClient protocol mirrors ib_async's camelCase API names on purpose (structural
 # typing must match the real client); N802/N803 do not apply there.
 "src/qrp/infrastructure/brokers/ibkr/adapter.py" = ["N802", "N803"]
