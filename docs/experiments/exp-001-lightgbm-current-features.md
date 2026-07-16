@@ -111,3 +111,27 @@ the RTH LightGBM smoke test; the all-session span reads slightly higher (0.529).
 is the real question and is Phase 5. The honest expectation remains that a directional edge this weak
 may not survive costs — and that finding, when it comes, is also a real answer. Next step is the
 cost gate on this edge, *not* a wider grid or a nudged label (foreclosed by pre-registration).
+
+### Null interrogation (a deflation railed at 1.0000 must be distrusted first)
+
+A deflation pinned to 1.0000 with 0.0000 seed-spread is uninformative until we know *why*: genuinely
+huge margin, or a too-narrow null. Two checks (B=150):
+
+| null | mean | std | max | σ above mean | obs − max | deflation |
+|---|---:|---:|---:|---:|---:|---:|
+| **full shuffle** | 0.4999 | **0.00154** | 0.5050 | **18.8** | **+0.0239** | 1.0000 |
+| **block (b=300)** | 0.5000 | 0.00158 | 0.5047 | 18.3 | +0.0242 | 1.0000 |
+
+- **The null is honest, not narrow.** Full-shuffle std 0.00154 sits inside the analytic
+  Mann–Whitney band (~0.0039/path, tighter once aggregated over 15 correlated paths). And the
+  **block-preserving null is the same width** (0.00158 ≈ 0.00154) — the full shuffle did *not*
+  understate σ. Reason: the stride-15 subsample has mean uniqueness 0.92, so the labels are already
+  near-independent (the thinning removed the lag-1 0.64 overlap) — there was no autocorrelation left
+  for the block shuffle to preserve. The block safeguard was moot here *because the subsample earned
+  it*, and the deflation on this sample is honest.
+- **The margin is real and large-in-σ, not knife-edge.** The observed 0.5289 is **18.8σ** above the
+  null mean and **0.024 above the max** of 150 draws — far above, not barely-above dressed as 1.0.
+
+**Conclusion of the interrogation:** the 1.0000 is the "large-in-σ, small-in-AUC" case, not a
+saturation artifact. The edge is ~19σ real and ~0.029 of AUC — genuinely there, genuinely tiny. The
+verdict stands, and the tiny magnitude is exactly why the Phase-5 cost gate is the real test.
