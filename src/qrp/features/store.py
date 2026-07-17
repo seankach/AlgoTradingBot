@@ -10,7 +10,8 @@ reflects only bars ``<=`` the previous *traded* bar (I1, ADR-0004/0008). Determi
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import inspect
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 
 import polars as pl
@@ -25,7 +26,7 @@ from qrp.features.generators import (
     RelativeVolume,
     TimeOfDay,
 )
-from qrp.features.protocols import FeatureGenerator
+from qrp.features.protocols import ContextFeatureGenerator, FeatureGenerator
 from qrp.observability.logging import get_logger
 
 _log = get_logger(__name__)
@@ -33,6 +34,9 @@ _LAG_BARS = 1  # single mandatory point-in-time lag: row t reflects bars <= prev
 _PARQUET_NAME = "features.parquet"
 _MANIFEST_NAME = "_build.json"
 _KEEP = ("ts_utc", "session", "is_traded")
+# The aligned context bar's TRUE stamp, carried through the as-of join so a generator can see how
+# stale its context is (ADR-0013 §5a: stale context nulls the feature, never drops the row).
+_CTX_TS = "_ctx_ts"
 
 
 class FeatureBuildManifest(StrictModel):
@@ -69,16 +73,59 @@ def default_generators(
     ]
 
 
+def _wants_context(generator: object) -> bool:
+    """Whether a generator's ``generate`` takes the aligned ``context`` (ADR-0013).
+
+    Dispatch is by signature, not ``isinstance``: both protocols are ``runtime_checkable`` and
+    structurally identical apart from ``generate``, and runtime protocol checks only verify method
+    *presence*, never signatures — so ``isinstance`` would match both and silently mis-dispatch.
+    """
+    generate = getattr(generator, "generate", None)
+    if generate is None:
+        return False
+    return "context" in inspect.signature(generate).parameters
+
+
+def _align_context(
+    target: pl.DataFrame, context: Mapping[str, pl.DataFrame]
+) -> dict[str, pl.DataFrame]:
+    """Row-align each context symbol to the target's traded bars, as-of ``ts <= t`` (ADR-0013 §2).
+
+    The **store** owns this join so no generator can construct it — a dangerous join belongs to
+    the framework, not the thing being tested (the ADR-0011 principle). Alignment is an as-of
+    *backward* join over the context's own **traded** series (ADR-0008), so it respects that SPY's
+    halts are not TSLA's and never pairs a padded minute. Where the context has no prior bar the
+    row is **null** (stale/absent), never dropped — dropping would couple the target's sample set
+    to context liquidity, a selection effect (ADR-0013 §5a). ``_ctx_ts`` carries the context bar's
+    true stamp so staleness is observable.
+
+    The result is aligned as-of *t* (concurrent allowed) **on purpose**: the store's single
+    mandatory lag then carries the PIT contract for target and context alike — one tested path.
+    """
+    target_ts = target.select("ts_utc")
+    aligned: dict[str, pl.DataFrame] = {}
+    for symbol, frame in context.items():
+        ctx = (
+            frame.filter(pl.col("is_traded"))
+            .sort("ts_utc")
+            .with_columns(pl.col("ts_utc").alias(_CTX_TS))
+        )
+        aligned[symbol] = target_ts.join_asof(ctx, on="ts_utc", strategy="backward")
+    return aligned
+
+
 def build_features(
     validated: pl.DataFrame,
-    generators: Sequence[FeatureGenerator],
+    generators: Sequence[FeatureGenerator | ContextFeatureGenerator],
     *,
     timezone: str,
+    context: Mapping[str, pl.DataFrame] | None = None,
 ) -> pl.DataFrame:
     """Compose generator outputs and apply the point-in-time lag.
 
     Returns ``ts_utc, session, is_traded`` plus the (lagged) feature columns. Empty in →
-    empty out.
+    empty out. ``context`` (symbol -> validated frame) is aligned by :func:`_align_context` and
+    handed to context-aware generators; the same single lag then governs it (ADR-0013).
     """
     if validated.is_empty():
         return pl.DataFrame()
@@ -96,10 +143,16 @@ def build_features(
     if frame.is_empty():
         return pl.DataFrame()
 
+    aligned = _align_context(frame, context) if context else {}
     result = frame.select(*_KEEP, _SESSION_DATE)
     market_columns: list[str] = []
     for generator in generators:
-        result = result.join(generator.generate(frame), on="ts_utc", how="left")
+        produced = (
+            generator.generate(frame, aligned)  # type: ignore[call-arg]
+            if _wants_context(generator)
+            else generator.generate(frame)  # type: ignore[call-arg]
+        )
+        result = result.join(produced, on="ts_utc", how="left")
         if not generator.is_deterministic:
             market_columns.extend(generator.output_columns)
 

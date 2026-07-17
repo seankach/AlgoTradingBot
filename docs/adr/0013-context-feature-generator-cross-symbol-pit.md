@@ -1,8 +1,10 @@
 # ADR-0013: Context-feature generator seam + the cross-symbol point-in-time contract
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-16
-- **Deciders:** Romesh Sharma (pending)
+- **Deciders:** Romesh Sharma (approved 2026-07-16; store-owned alignment and one-lag-not-two
+  explicitly endorsed and not to be relitigated; two open questions answered and one correction
+  folded in — the negative controls must also cover the **union timeline**, below)
 - **Charter refs:** §5 (bar stamp = START; features as-of *t* may use only bars ≤ *t*−1 — I1), §7
   (leakage tests are code), §9; extends **ADR-0006** (feature store + the single mandatory lag),
   **ADR-0008** (event-based/traded series); builds on ADR-0011 (the framework owns dangerous splits)
@@ -78,23 +80,64 @@ previous *TSLA* traded bar. That is the **conservative direction** (it discards 
 it never adds unusable information), and it buys a single tested lag path instead of two. Accepted
 deliberately.
 
-### 4. The leakage test is the acceptance criterion — written **first**
+### 4. The leakage test is the acceptance criterion — written **first**, with **two** negative controls
 
-The seam is **not done** until this passes; it is the cross-symbol analogue of the `close_t` arbiter:
+The seam is **not done** until both pass; this is the cross-symbol analogue of the `close_t` arbiter.
+Each control must be **proven to fail** a naive implementation — a leakage test that cannot fail is
+decoration (the planted-leak canary principle, ADR-0009).
 
-- **The gate:** plant a context feature equal to `SPY_close_t`, run it through the seam, and assert
-  that on **every** TSLA decision bar it carries the **previous** SPY traded close and **never** the
-  concurrent one.
-- **The negative control:** the naive `join(context, on="ts_utc")` must **fail** that assertion —
-  proving the test bites rather than passing vacuously. A leakage test that cannot fail is decoration
-  (the planted-leak canary principle, ADR-0009).
+**Control 1 — the concurrent-bar leak (lockstep calendars).** Plant a context feature equal to
+`SPY_close_t`; assert that on **every** TSLA decision bar it carries the **previous** SPY traded
+close, never the concurrent one. The naive implementation — joining SPY on `ts_utc` into the feature
+frame *after* the lag, so the context is never lagged — must **fail** it.
 
-Both go in the §7 suite and are CI-blocking.
+**Control 2 — the cross-calendar off-by-one (union timeline).** Control 1 only proves the rule when
+both symbols trade **in lockstep**, and *they do not*: SPY can print in a minute TSLA does not, and
+vice versa, so "previous SPY traded close" and "previous TSLA traded bar" land on **different
+timestamps**. An off-by-one in *which symbol's clock defines "previous"* is a leak Control 1 cannot
+see. So: construct TSLA trading at `{1, 2, 5}` and SPY at `{1, 2, 3, 4, 5}`, and assert the aligned
+context on TSLA's decision bar **5** is:
 
-### 5. Context symbols are inputs only
+- **strictly before** the decision timestamp (never SPY bar 5 — the concurrent leak), **and**
+- **SPY bar 2** — i.e. SPY as-of TSLA's *previous traded bar* — and **not** SPY bars 3 or 4, which
+  exist **only because TSLA was absent**.
+
+The second clause is the real content: it pins **the target's traded clock as the definition of
+"previous"**, so the alignment and the lag are driven by the *same* clock. (SPY bar 4 would in fact
+be PIT-*legal* under §5 — it is ≤ *t*−1 — but taking it would mean the alignment used a different
+clock from the lag, which is precisely the inconsistency that breeds an off-by-one. The conservative
+rule is also the unambiguous one.) **The test must prove the PIT rule on the union timeline, not just
+in lockstep.**
+
+Both controls go in the §7 suite and are CI-blocking.
+
+### 5. Context symbols are inputs only, and `role` lives on the symbol — and in the `dataset_id`
 
 SPY/QQQ are **never labelled and never traded** — no label spec, no barriers, no positions. They
-exist solely as PIT inputs. The universe config carries the target/context distinction.
+exist solely as PIT inputs.
+
+**`role` is a field on `SymbolSpec`** (`target` | `context`), not on the feature spec: it is a durable
+property of the instrument's place in the platform, and the feature spec should *consume* it, not
+redeclare it.
+
+**The guard (required):** the role assignment is part of what makes a dataset reproducible — a run
+where SPY was `context` and one where it was `target` are **different datasets**. So the
+symbol→role mapping **must flow into `dataset_id` and be captured in the manifest, not only in
+config**; otherwise two non-reproducible datasets collide on one id (I6). This extends ADR-0003's
+`dataset_id` composition and lands with the dataset build, not with this seam.
+
+### 5a. Stale/absent context → **null the feature**, never drop the row
+
+If a context symbol has no bar (halt, late listing, gap), the feature is **null** and a
+**`context_stale_bars`** diagnostic records it. The row is **not dropped**, for a specific reason:
+dropping would make the *target's* sample set depend on the *context's* data availability — silently
+changing which TSLA decisions exist based on whether SPY happened to trade. That couples the label
+population to context liquidity: **a selection effect**. Nulling keeps the target sample intact and
+lets the model (LightGBM handles NaN natively) treat "context unavailable" as its own information.
+
+**Pre-declared for the eventual experiment:** if `context_stale_bars` exceeds a declared fraction of
+decisions, the cross-asset feature is **too gappy to trust — and that is a finding, not a
+fix-by-dropping.** The threshold is declared in that pre-registration, before any number exists.
 
 ### 6. First context features (built only after the seam is green)
 
