@@ -1,7 +1,23 @@
-# Symbol universe. Phase 1 trades a single instrument.
+# Symbol universe.
+#
+# TSLA is the TARGET (the instrument we label and trade). SPY/QQQ are CONTEXT symbols:
+# ingested and validated through the identical pipeline, never labelled or traded, used only
+# as point-in-time inputs to cross-asset features (ADR-0013). Adding them is a config change —
+# ingestion and validation carry no symbol-specific logic.
 symbols:
   - symbol: "TSLA"
     sec_type: "STK"
     exchange: "SMART"
     primary_exchange: "NASDAQ"   # disambiguates the SMART contract
+    currency: "USD"
+  # --- context symbols (index/sector context for the target) ---
+  - symbol: "SPY"
+    sec_type: "STK"
+    exchange: "SMART"
+    primary_exchange: "ARCA"     # SPY is listed on NYSE Arca
+    currency: "USD"
+  - symbol: "QQQ"
+    sec_type: "STK"
+    exchange: "SMART"
+    primary_exchange: "NASDAQ"   # QQQ is listed on Nasdaq
     currency: "USD"
