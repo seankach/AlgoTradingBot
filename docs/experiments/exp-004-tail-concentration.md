@@ -74,6 +74,57 @@ percent or two in the percentile tail — irrelevant to a 14-point gap.
 
 ---
 
-## Results (appended after the run — empty until then)
+## Results (appended after the run — 2026-07-16)
 
-_pending_
+Ran once against the pre-declared breakevens. Both arms registered as trials.
+
+| arm | quantile | tail accuracy | vs 1× breakeven (65.4%) |
+|---|---:|---:|---|
+| global (most generous) | 0.10 | **0.5133** | below |
+| global (most generous) | 0.01 | **0.5174** | below |
+| within-bucket (conditional) | 0.10 | 0.5089 | below |
+| within-bucket (conditional) | 0.01 | 0.5093 | below |
+
+**VERDICT (pre-declared rule): best tail 0.5174 < 65.4% → signal present but NOT tradeable →
+DEATH-AT-COST → new features. Do not build the spread lake.**
+
+### The edge does not concentrate — that is the finding
+
+Going from the decile to the **percentile** — a 10× tightening of the confidence filter — moves
+accuracy by **+0.4pp** (0.5133 → 0.5174). A concentrated edge would climb steeply as the filter
+tightens; this one is flat. The signal is **diffuse and uniformly weak**, exactly as AUC 0.5072
+implied, and the tail hypothesis — the only thing that could have rescued it — is falsified.
+
+The conditional (non-calendar) tail is weaker still (0.5089/0.5093), consistent with EXP-003: the
+part that isn't the clock is the smaller part.
+
+**Even the best tail loses money by a wide margin.** At 51.74% accuracy on a 20.03 bps barrier the
+gross expectancy is `(2×0.5174 − 1) × 20.03 = 0.70 bps` against **6.15 bps** of round-trip cost —
+still **~9× short**, i.e. ≈ −5.5 bps per round trip at 1×, before §8's 2× bar is even considered.
+
+**Decisive against its own resolution.** The gap (65.4% − 51.7% = **13.7pp**) is ~2.5× the
+percentile tail's 3σ resolution (±5.4pp) and ~8× the decile's (±1.7pp). This is not a
+power-limited null.
+
+### What this settles
+
+**Signal-vs-tradeable — the distinction sign-AUC structurally could not make, and costs can.** The
+arc is complete and each step was a real answer:
+
+- **EXP-001** — a directional edge exists: AUC 0.5289, 18.8σ, survives a 12-way search.
+- **EXP-002/003** — about half of it was a **calendar** (base rate), not timing; ~53% survives as
+  genuine within-minute conditional signal (AUC 0.5072, +4.38σ).
+- **EXP-004** — that surviving signal is **real but ~43× too small to trade**, and it does not hide
+  in a tail.
+
+The honest conclusion: **this feature family — lagged returns, EWMA/range vol, relative volume on
+1-min bars — does not carry tradeable directional timing on TSLA.** No tuning within it changes that;
+the ceiling is the features, and it is an order of magnitude below the cost floor. The next move is
+**genuinely new features**, not variants of these. The well is dry and we know why.
+
+### Caveat status
+
+The placeholder commission rates never became load-bearing: they are 0.28 of the 6.15 bps, and the
+verdict is a 9–43× miss. A death verdict is safe against any plausible commission schedule, so the
+§8 "supply your real rates" requirement is **not** a blocker for *this* conclusion. It becomes
+mandatory the moment any candidate strategy gets near the cost line.
