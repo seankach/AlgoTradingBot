@@ -1,6 +1,10 @@
 # EXP-003 (pre-registered): once you can't profit from the clock, is any timing signal left?
 
 - **Status:** PRE-REGISTERED — threshold committed to git **before** market-only ran.
+  **OPERATIVE VERDICT** for the calendar-vs-timing question; supersedes EXP-002 (authorised
+  2026-07-16), whose rule was keyed to the calendar's *standalone-global* score rather than its
+  *share*. EXP-002 is retained, not rewritten — the correction trail is the evidence it was a
+  correction and not experiment-shopping.
 - **Date registered:** 2026-07-16
 - **Charter refs:** ADR-0009/0010/0011; EXP-001, EXP-002 (`exp-002-calendar-ablation.md`)
 

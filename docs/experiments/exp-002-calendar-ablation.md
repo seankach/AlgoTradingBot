@@ -58,6 +58,26 @@ No deflation is needed for a *decomposition*; the trials still register for futu
 
 ## Results (appended after the run — 2026-07-16)
 
+> ### ⚠ VERDICT RETAINED BUT SUPERSEDED by EXP-003 (2026-07-16)
+>
+> **This experiment's numbers are correct; its *rule* was keyed to the wrong quantity.** EXP-002
+> measured the calendar's **standalone global** score (0.5225) and inferred its share **by
+> subtraction** — a confounded instrument, because "what the calendar achieves alone" is not "the
+> fraction of the edge that *is* calendar". EXP-003 removes the calendar **by construction**
+> (1-min buckets; calendar-only conditional AUC = **0.5000 exactly**, a validity control true
+> independently of the verdict) and measures the survivor **directly**: within-bucket signal is
+> ~0.0154 of the excess (53%), between-bucket calendar ~0.0135 (47%) — roughly half and half, not
+> "78% calendar".
+>
+> The two experiments **do not disagree about a fact.** Correcting the instrument changes the input
+> to the rule, and the rule then fires the other way. The supersession was **decidable before
+> EXP-003's number existed** (same test as the re-bucketing repair): the confound is visible in the
+> method, and calendar-only = 0.5000 proves the removal regardless of outcome.
+>
+> **This section is deliberately preserved, not rewritten.** The "concluded X → found the instrument
+> confounded → concluded Y" trail is what shows this was a correction. A silently replaced EXP-002
+> is what experiment-shopping looks like. **Operative verdict: EXP-003.**
+
 Ran once, exactly as registered. Three trials registered (15 total on this dataset with EXP-001's 12).
 
 | trial | features | wAUC | share of full's excess |
