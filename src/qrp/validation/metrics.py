@@ -95,6 +95,48 @@ def conditional_weighted_auc(
     return num / den if den > 0 else float("nan")
 
 
+def tail_accuracy(
+    actual_positive: _Bool,
+    score: _F64,
+    weight: _F64,
+    *,
+    quantile: float,
+    bucket: _F64 | None = None,
+) -> float:
+    """Weighted directional accuracy of a trade-only-the-extremes rule (EXP-004).
+
+    Takes the top ``quantile`` of ``score`` (go long) and the bottom ``quantile`` (go short) and
+    returns the uniqueness-weighted fraction of correct directional calls across that union — i.e.
+    the realised accuracy of the trades such a rule would actually place. This is the number that
+    must clear the cost breakeven, because AUC is an *aggregate* and cannot rule out an edge
+    concentrated in a small high-confidence tail.
+
+    With ``bucket`` given, ranking is done **within** each bucket (the conditional/non-calendar
+    tail); otherwise globally. Returns ``nan`` if either tail is empty.
+    """
+    if bucket is None:
+        lo, hi = np.quantile(score, quantile), np.quantile(score, 1.0 - quantile)
+        top, bot = score >= hi, score <= lo
+    else:
+        top = np.zeros(score.shape, dtype=bool)
+        bot = np.zeros(score.shape, dtype=bool)
+        for b in np.unique(bucket):
+            m = bucket == b
+            s = score[m]
+            if s.size < 2:
+                continue
+            hi_b, lo_b = np.quantile(s, 1.0 - quantile), np.quantile(s, quantile)
+            idx = np.nonzero(m)[0]
+            top[idx[s >= hi_b]] = True
+            bot[idx[s <= lo_b]] = True
+    # long the top tail (correct iff actually positive), short the bottom (correct iff negative)
+    correct_w = float(
+        (weight[top] * actual_positive[top]).sum() + (weight[bot] * ~actual_positive[bot]).sum()
+    )
+    total_w = float(weight[top].sum() + weight[bot].sum())
+    return correct_w / total_w if total_w > 0 else float("nan")
+
+
 def balanced_accuracy(actual_positive: _Bool, predicted_positive: _Bool) -> float:
     """Mean of per-class recall — 0.5 under chance regardless of class balance."""
     tp = int((predicted_positive & actual_positive).sum())

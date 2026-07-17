@@ -34,7 +34,12 @@ import polars as pl
 
 from qrp.validation.leakage import assert_features_are_not_outcomes
 from qrp.validation.lockbox import Lockbox
-from qrp.validation.metrics import balanced_accuracy, conditional_weighted_auc, weighted_auc
+from qrp.validation.metrics import (
+    balanced_accuracy,
+    conditional_weighted_auc,
+    tail_accuracy,
+    weighted_auc,
+)
 from qrp.validation.splits import PurgedCPCV
 from qrp.validation.trials import Trial, TrialSpec, TrialStore
 from qrp.validation.weights import uniqueness_weights
@@ -310,6 +315,69 @@ class Study:
                 continue
             out.append(weighted_auc(actual[scored] > 0, score[scored], weights[test_idx][scored]))
         return np.asarray(out, dtype=np.float64)
+
+    def tail_accuracies(
+        self,
+        dataset: pl.DataFrame,
+        model: Model,
+        *,
+        feature_columns: list[str],
+        h_bars: int,
+        quantiles: list[float],
+        within_bucket: bool = False,
+        label_column: str = "label",
+        trial: TrialSpec | None = None,
+    ) -> dict[float, float]:
+        """Out-of-fold directional accuracy of a trade-only-the-extremes rule (EXP-004).
+
+        For each quantile, the weighted accuracy of going long the top tail and short the bottom
+        tail, pooled across CPCV paths. ``within_bucket`` ranks inside each ``bucket_column`` group
+        (the conditional/non-calendar tail) instead of globally. This exists because AUC is an
+        aggregate: it cannot rule out an edge concentrated in a small high-confidence tail, and only
+        that tail's realised accuracy can be compared to a cost breakeven.
+        """
+        assert_features_are_not_outcomes(feature_columns)
+        ordered = dataset.sort("decision_ts")
+        labels = ordered.select("decision_ts", "entry_ts", "exit_ts")
+        x = ordered.select(feature_columns).to_numpy().astype(np.float64)
+        y = ordered.get_column(label_column).to_numpy().astype(np.float64)
+        entry_us = _epoch_us(labels, "entry_ts")
+        exit_us = _epoch_us(labels, "exit_ts")
+        weights = uniqueness_weights(_epoch_us(labels, "decision_ts"), entry_us, exit_us)
+        buckets = (
+            ordered.get_column(self._bucket_column).to_numpy().astype(np.float64)
+            if (within_bucket and self._bucket_column is not None)
+            else None
+        )
+
+        per_q: dict[float, list[float]] = {q: [] for q in quantiles}
+        for train_idx, test_idx in self._splitter.split(labels, h_bars=h_bars):
+            if train_idx.size == 0 or test_idx.size == 0:
+                continue
+            fitted = self._fit_fold(model, x, y, weights, train_idx, entry_us, exit_us)
+            score = fitted.predict(x[test_idx])
+            actual = y[test_idx]
+            scored = actual != 0
+            if scored.sum() < 10:
+                continue
+            pos, sc = actual[scored] > 0, score[scored]
+            w = weights[test_idx][scored]
+            bk = buckets[test_idx][scored] if buckets is not None else None
+            for q in quantiles:
+                a = tail_accuracy(pos, sc, w, quantile=q, bucket=bk)
+                if not math.isnan(a):
+                    per_q[q].append(a)
+        if self._trial_store is not None and trial is not None:
+            self._trial_store.register(
+                Trial(
+                    trial_hash=trial.hash(feature_columns),
+                    dataset_id=trial.dataset_id,
+                    model_class=trial.model_class,
+                    auc=float("nan"),
+                    registered_at=datetime.now(UTC),
+                )
+            )
+        return {q: (float(np.mean(v)) if v else float("nan")) for q, v in per_q.items()}
 
     def evaluate_lockbox(
         self,

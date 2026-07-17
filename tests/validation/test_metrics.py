@@ -5,7 +5,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from qrp.validation.metrics import auc, balanced_accuracy, conditional_weighted_auc
+from qrp.validation.metrics import (
+    auc,
+    balanced_accuracy,
+    conditional_weighted_auc,
+    tail_accuracy,
+)
 
 
 def test_metrics_are_imbalance_robust_but_accuracy_is_not() -> None:
@@ -55,6 +60,31 @@ def test_conditional_auc_equals_weighted_auc_with_one_bucket() -> None:
     score = rng.standard_normal(300)
     one = np.zeros(300)
     assert conditional_weighted_auc(pos, score, np.ones(300), one) == pytest.approx(auc(pos, score))
+
+
+def test_tail_accuracy_recovers_a_concentrated_edge_and_reads_chance_on_noise() -> None:
+    # EXP-004's premise: AUC is an aggregate, so an edge could hide in a high-confidence tail.
+    # A score that is pure noise EXCEPT in its extremes, where it is 90% right.
+    rng = np.random.default_rng(0)
+    n = 10_000
+    pos = rng.random(n) < 0.5
+    score = rng.standard_normal(n)  # noise -> globally uninformative
+    # plant a 90%-accurate top/bottom decile
+    hi, lo = np.quantile(score, 0.9), np.quantile(score, 0.1)
+    top, bot = score >= hi, score <= lo
+    pos[top] = rng.random(int(top.sum())) < 0.9  # top tail mostly positive
+    pos[bot] = rng.random(int(bot.sum())) > 0.9  # bottom tail mostly negative
+    w = np.ones(n)
+
+    tail = tail_accuracy(pos, score, w, quantile=0.1)
+    aggregate = auc(pos, score)
+    assert tail > 0.85  # the tail edge is recovered...
+    assert aggregate < 0.70  # ...while the AGGREGATE badly understates it (0.90 tail -> ~0.64 AUC)
+    assert tail - aggregate > 0.2  # the whole premise of EXP-004: AUC can hide a concentrated edge
+
+    # A purely noisy score has no tail edge.
+    noise_pos = rng.random(n) < 0.5
+    assert abs(tail_accuracy(noise_pos, score, w, quantile=0.1) - 0.5) < 0.05
 
 
 def test_auc_nan_when_a_class_is_absent() -> None:
