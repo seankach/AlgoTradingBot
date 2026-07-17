@@ -13,6 +13,8 @@ is not part of the package.)
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import numpy.typing as npt
 from scipy.stats import rankdata
@@ -55,6 +57,42 @@ def weighted_auc(actual_positive: _Bool, score: _F64, weight: _F64) -> float:
     neg_tie = grp_neg[inv]  # neg weight at the same score
     contrib = (w * pos) * (neg_below + 0.5 * neg_tie)
     return float(contrib.sum() / (w_pos * w_neg))
+
+
+def conditional_weighted_auc(
+    actual_positive: _Bool, score: _F64, weight: _F64, bucket: _F64
+) -> float:
+    """Within-bucket weighted AUC — only same-bucket positive/negative pairs count (EXP-003).
+
+    Answers "can the model rank an up-move above a down-move *that happened in the same bucket*".
+    Because the base rate is constant inside a bucket, it can contribute nothing to the ranking, so
+    a purely base-rate (calendar) edge scores 0.5 here while genuine conditional timing survives.
+
+    Crucially this **fits no base rate**, so removing the calendar cannot itself leak: there is no
+    estimated quantity to contaminate with test-period information. De-meaning the target would
+    not work — for binary ``y`` and ``b = E[y|bucket]``, ``sign(y - b) == sign(y)`` always, so a
+    residual target leaves a rank statistic untouched; the calendar pays via *between-bucket class
+    balance*, which only a between-bucket operation can remove.
+
+    Pooled over buckets by pair mass: ``sum_b(AUC_b * Wpos_b * Wneg_b) / sum_b(Wpos_b * Wneg_b)``.
+    Equals :func:`weighted_auc` when there is a single bucket. Buckets lacking either class are
+    skipped. Returns ``nan`` if no bucket contributes.
+    """
+    num = 0.0
+    den = 0.0
+    for b in np.unique(bucket):
+        m = bucket == b
+        pos_m, score_m, w_m = actual_positive[m], score[m], weight[m]
+        w_pos = float(w_m[pos_m].sum())
+        w_neg = float(w_m[~pos_m].sum())
+        if w_pos == 0.0 or w_neg == 0.0:
+            continue
+        a = weighted_auc(pos_m, score_m, w_m)
+        if math.isnan(a):
+            continue
+        num += a * w_pos * w_neg
+        den += w_pos * w_neg
+    return num / den if den > 0 else float("nan")
 
 
 def balanced_accuracy(actual_positive: _Bool, predicted_positive: _Bool) -> float:

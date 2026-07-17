@@ -34,7 +34,7 @@ import polars as pl
 
 from qrp.validation.leakage import assert_features_are_not_outcomes
 from qrp.validation.lockbox import Lockbox
-from qrp.validation.metrics import balanced_accuracy, weighted_auc
+from qrp.validation.metrics import balanced_accuracy, conditional_weighted_auc, weighted_auc
 from qrp.validation.splits import PurgedCPCV
 from qrp.validation.trials import Trial, TrialSpec, TrialStore
 from qrp.validation.weights import uniqueness_weights
@@ -159,10 +159,15 @@ class Study:
         *,
         trial_store: TrialStore | None = None,
         inner_val_frac: float | None = None,
+        bucket_column: str | None = None,
     ) -> None:
         self._splitter = splitter
         self._trial_store = trial_store
         self._inner_val_frac = inner_val_frac
+        # When set, the primary metric becomes the WITHIN-bucket AUC (EXP-003): only same-bucket
+        # pos/neg pairs count, so a between-bucket base rate (the calendar) cannot pay. Set on the
+        # Study — not per-run — so the permutation harness produces a *conditional* null too.
+        self._bucket_column = bucket_column
 
     def _fit_fold(
         self,
@@ -212,6 +217,11 @@ class Study:
         entry_us = _epoch_us(labels, "entry_ts")
         exit_us = _epoch_us(labels, "exit_ts")
         weights = uniqueness_weights(_epoch_us(labels, "decision_ts"), entry_us, exit_us)
+        buckets = (
+            ordered.get_column(self._bucket_column).to_numpy().astype(np.float64)
+            if self._bucket_column is not None
+            else None
+        )
 
         aucs: list[float] = []
         baccs: list[float] = []
@@ -228,7 +238,13 @@ class Study:
             positive = actual[scored] > 0
             fold_score = score[scored]
             fold_w = weights[test_idx][scored]
-            fold_auc = weighted_auc(positive, fold_score, fold_w)
+            fold_auc = (
+                weighted_auc(positive, fold_score, fold_w)
+                if buckets is None
+                else conditional_weighted_auc(
+                    positive, fold_score, fold_w, buckets[test_idx][scored]
+                )
+            )
             if not math.isnan(fold_auc):
                 aucs.append(fold_auc)
             baccs.append(balanced_accuracy(positive, fold_score > 0))
