@@ -56,6 +56,46 @@ No deflation is needed for a *decomposition*; the trials still register for futu
 
 ---
 
-## Results (appended after the run — empty until then)
+## Results (appended after the run — 2026-07-16)
 
-_pending_
+Ran once, exactly as registered. Three trials registered (15 total on this dataset with EXP-001's 12).
+
+| trial | features | wAUC | share of full's excess |
+|---|---:|---:|---:|
+| **calendar floor** (clock alone) | 4 | **0.5225** | **77.9%** |
+| **market-only** | 7 | **0.5108** | 37.3% |
+| full (EXP-001 winner) | 11 | 0.5289 | 100% |
+
+**VERDICT (pre-declared rule): calendar_excess (0.0225) ≥ 0.5 × full_excess (0.0145) →
+SUBSTANTIALLY BASE-RATE → back to FEATURES.**
+
+### What this means
+
+**The edge is mostly a calendar.** A model with **no market information whatsoever** — only
+`minute_of_day` and the session flags — reaches **0.5225**, capturing **78%** of the entire edge.
+That is base-rate quoting: some times of day and sessions carry a directional skew, and the model
+ranks by it with **zero timing ability**. There is no per-trade signal to execute against.
+
+**The market features carry almost nothing.** Market-only is **0.5108** — real (≈7σ above the
+measured null std of 0.00154) but ≈0.011 of AUC. Adding all seven market features to the clock lifts
+the full model from 0.5225 to only **0.5289** (+0.0064).
+
+**The parts over-sum (78% + 37% = 115%)** — calendar and market signal are partially redundant, so
+the market features are substantially re-expressing the same intraday pattern rather than adding
+independent information.
+
+**This is what the ablation was for.** EXP-001's headline 0.5289 was hiding this, and the Phase-5
+cost gate run first would have **green-lit a mirage** — building a cost model around a clock.
+
+### Consequences
+
+- **Next step is better features, not a wider grid and not a nudged label** (foreclosed by
+  pre-registration). The current market feature set — lagged returns, EWMA/range vol, relative
+  volume — carries ~0.011 of AUC. That is the honest ceiling of *this* direction.
+- **Open design question for the next round:** should `minute_of_day` / session flags be in a
+  *directional* model at all? They are what let it quote a base rate that isn't tradeable alpha.
+  Either exclude them, or de-mean the target by session base rate so the model must earn its AUC
+  from conditional timing.
+- The calendar tilt itself may be a real intraday seasonality, but it is a drift/seasonality play,
+  not the timing model we thought we had — and at 0.0225 of AUC it would need its own honest
+  evaluation, almost certainly cost-dead.
