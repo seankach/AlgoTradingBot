@@ -27,11 +27,16 @@ def _trial(h: str, *, dataset_id: str = _DID, auc: float = 0.6) -> Trial:
 
 
 def test_trial_hash_is_stable_and_config_sensitive() -> None:
-    def h(model_class: str = "GBM", hp: dict[str, object] | None = None) -> str:
+    def h(
+        model_class: str = "GBM",
+        hp: dict[str, object] | None = None,
+        feats: list[str] | None = None,
+    ) -> str:
         return trial_hash(
             dataset_id=_DID,
             model_class=model_class,
             hyperparameters={"depth": 3, "seed": 1} if hp is None else hp,
+            feature_columns=["f0", "f1"] if feats is None else feats,
             feature_spec_version="2026.07.14-eventbar",
             label_spec_version="2026.07.14-eventbar",
         )
@@ -42,6 +47,10 @@ def test_trial_hash_is_stable_and_config_sensitive() -> None:
     assert h() != h(hp={"depth": 3, "seed": 2})  # seed counts
     assert h() != h(model_class="RandomForest")
     assert h() == h(hp={"seed": 1, "depth": 3})  # key order in the dict must not matter
+    # ADR-0010 amendment: a feature ABLATION is a distinct bet even with identical hyperparameters.
+    assert h() != h(feats=["f0"])  # dropping a feature -> new trial
+    assert h() != h(feats=["f0", "f1", "f2"])  # adding one -> new trial
+    assert h() == h(feats=["f1", "f0"])  # column ORDER must not matter (it's a set)
 
 
 def test_new_config_increments_but_rerun_is_idempotent() -> None:

@@ -63,6 +63,24 @@ def test_multi_config_session_increments_but_reruns_do_not() -> None:
     assert all(not np.isnan(t.auc) for t in store.trials(_DID))
 
 
+def test_feature_ablations_register_as_distinct_trials() -> None:
+    # ADR-0010 amendment: same hyperparameters, DIFFERENT feature set = a different bet. Before the
+    # amendment these hashed identically and three ablations registered as ONE trial — the exact
+    # undercount the registry exists to prevent (found while scoping EXP-002).
+    store = InMemoryTrialStore()
+    study = Study(PurgedCPCV(n_groups=6, k_test_groups=2), trial_store=store)
+    data = _dataset().with_columns(f1=pl.Series(np.random.default_rng(9).standard_normal(600)))
+    spec = _spec(3)  # identical spec for every ablation
+
+    for feats in (["f0"], ["f1"], ["f0", "f1"]):
+        study.run(data, CorrelationSignModel(), feature_columns=feats, h_bars=5, trial=spec)
+    assert store.count(_DID) == 3  # three feature sets -> three trials
+
+    # Re-running one of them is still idempotent, and column order is not a new bet.
+    study.run(data, CorrelationSignModel(), feature_columns=["f1", "f0"], h_bars=5, trial=spec)
+    assert store.count(_DID) == 3
+
+
 def test_run_without_trial_or_store_registers_nothing() -> None:
     store = InMemoryTrialStore()
     study = Study(PurgedCPCV(n_groups=6, k_test_groups=2), trial_store=store)

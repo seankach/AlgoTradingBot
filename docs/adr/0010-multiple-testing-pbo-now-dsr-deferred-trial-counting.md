@@ -155,8 +155,20 @@ defined precisely and **persisted**, not left to memory:
 
 - **A trial is one distinct configuration evaluated against a dataset's validation.** Trial identity
   is the **content hash** of everything that can change the OOS score: `{model class,
-  hyperparameters *including any seed that affects the fit*, feature_spec_version, label_spec_version,
-  dataset_id}`. Distinct hash → distinct trial.
+  hyperparameters *including any seed that affects the fit*, **feature_columns**,
+  feature_spec_version, label_spec_version, dataset_id}`. Distinct hash → distinct trial.
+
+  > **Amendment (2026-07-16) — `feature_columns` added to the identity.** Found while scoping
+  > EXP-002 (calendar ablation): the original identity omitted the feature **column set**, because
+  > `feature_spec_version` is the *pipeline* version, not the selected subset. A feature **ablation**
+  > changes the bet while every other field is identical, so three ablations hashed identically and
+  > registered as **one** trial — the precise undercount this count exists to prevent, and silent.
+  > Feature ablation is now a recurring experiment type, so the next one would have undercounted too.
+  > The set is hashed **sorted** (column order does not change the model), and — critically —
+  > **`Study.run` supplies the columns that actually ran**; `TrialSpec` deliberately does *not* carry
+  > them, so a declared feature set cannot drift from the executed one. Folding the feature set into
+  > `hyperparameters` (the EXP-002 stopgap) was the right behaviour in the wrong place: it relied on
+  > the caller remembering, which is the failure mode this ADR exists to remove.
 - **Counting rule.** A **new configuration increments**; a hyperparameter draw is a trial (that is
   precisely what deflation charges for); **a re-run of an identical hash is idempotent and does
   *not* increment** (I6: same inputs + git_sha reproduce the same result — a reproduction is not a

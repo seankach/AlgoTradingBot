@@ -243,7 +243,9 @@ class Study:
         if self._trial_store is not None and trial is not None:
             self._trial_store.register(
                 Trial(
-                    trial_hash=trial.hash(),
+                    # The hash takes the columns that ACTUALLY ran, not a caller-declared set —
+                    # a feature ablation is a distinct bet and must count as one (ADR-0010).
+                    trial_hash=trial.hash(feature_columns),
                     dataset_id=trial.dataset_id,
                     model_class=trial.model_class,
                     auc=result.auc,

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol, runtime_checkable
@@ -46,15 +46,24 @@ def trial_hash(
     dataset_id: str,
     model_class: str,
     hyperparameters: Mapping[str, object],
+    feature_columns: Sequence[str],
     feature_spec_version: str,
     label_spec_version: str,
 ) -> str:
-    """Content hash of the trial identity — distinct hash iff the OOS score can differ."""
+    """Content hash of the trial identity — distinct hash iff the OOS score can differ.
+
+    ``feature_columns`` is part of the identity (ADR-0010 amendment, 2026-07-16): a feature
+    *ablation* changes the bet even when every hyperparameter is identical, and
+    ``feature_spec_version`` is the *pipeline* version, not the selected subset. Without this,
+    ablation trials hash identically and the registry silently undercounts — the exact failure the
+    count exists to prevent. Hashed as a sorted set: column order does not change the model.
+    """
     payload = json.dumps(
         {
             "dataset_id": dataset_id,
             "model_class": model_class,
             "hyperparameters": hyperparameters,
+            "feature_columns": sorted(feature_columns),
             "feature_spec_version": feature_spec_version,
             "label_spec_version": label_spec_version,
         },
@@ -78,12 +87,18 @@ class TrialSpec:
     feature_spec_version: str
     label_spec_version: str
 
-    def hash(self) -> str:
-        """The content hash that identifies this trial in the registry."""
+    def hash(self, feature_columns: Sequence[str]) -> str:
+        """The content hash identifying this trial, given the columns that actually ran.
+
+        ``feature_columns`` is supplied by ``Study.run`` from the columns it actually scored — never
+        by the caller — so a declared feature set cannot drift from the executed one (ADR-0010
+        amendment). The spec deliberately does not carry the feature set for that reason.
+        """
         return trial_hash(
             dataset_id=self.dataset_id,
             model_class=self.model_class,
             hyperparameters=self.hyperparameters,
+            feature_columns=feature_columns,
             feature_spec_version=self.feature_spec_version,
             label_spec_version=self.label_spec_version,
         )
