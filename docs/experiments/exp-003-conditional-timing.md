@@ -89,6 +89,53 @@ it, so no latitude exists.
 
 ---
 
-## Results (appended after the run — empty until then)
+## Results (appended after the run — 2026-07-16)
 
-_pending_
+Ran once against the committed threshold. Two trials registered.
+
+| trial | conditional AUC (1-min) | σ vs null | vs threshold 0.50492 |
+|---|---:|---:|---|
+| calendar-only | **0.5000** | 0.00 | (by construction — validity proof) |
+| **market-only** | **0.5072** | **+4.38** | **clears** |
+| full-11 | **0.5154** | +9.39 | clears |
+
+**VERDICT (pre-declared rule): market-only 0.5072 ≥ 0.50492 → a within-bucket timing signal is
+DETECTABLE → Phase-5 cost analysis.**
+
+### The full-11 control was the surprise, and it is *not* base rate
+
+`full_11 − market_only = +0.0082`. The calendar features add within-bucket signal **despite scoring
+exactly 0.5000 alone**. That is not a contradiction and it is not base-rate quoting — the conditional
+metric makes base-rate quoting arithmetically impossible. It is **interaction**: constant-within-a-
+bucket features cannot *rank* inside a bucket, but a tree can use them to *condition* — learning that
+`ret_30b` means something different at 09:35 than at 15:50. The market signal's shape is
+time-dependent, and conditioning on time helps. It is out-of-sample (CPCV, purged), so it is real,
+not in-sample fitting — though a per-minute mapping learned from ~96 rows/bucket may be regime-fragile.
+
+### This revises EXP-002's headline
+
+EXP-002 reported "78% of the edge is calendar", but that number was **what the calendar achieves
+*alone*, globally** — not the fraction of the edge that *is* calendar. The conditional decomposition
+is the sharper instrument. For the same config and data:
+
+    full, GLOBAL AUC       0.5289   (excess 0.0289)   [EXP-001]
+    full, CONDITIONAL AUC  0.5154   (excess 0.0154)   [EXP-003]
+    -> between-bucket calendar ≈ 0.0135  (47% of the excess)
+    -> within-bucket, genuine  ≈ 0.0154  (53% of the excess)
+
+So the edge is **roughly half base-rate calendar, half real conditional timing** — not "mostly a
+calendar." EXP-002's conclusion is superseded on methodological grounds (its comparison conflated
+"what the calendar can do alone" with "how much of the edge is calendar"), **not** because EXP-003 is
+newer or more favourable. See the flag below.
+
+### Two things this does NOT mean
+
+1. **Not "we have alpha."** The surviving signal is tiny — AUC 0.5072 (market-only) to 0.5154 (with
+   time-conditioning), i.e. 0.007–0.015 of excess. "→ Phase-5 costs" means *there is a non-calendar
+   signal worth costing*, not that it will survive half-spread + commissions. A directional edge this
+   weak remains the most likely thing to die at the cost gate, and that would still be a real answer.
+2. **The two pre-registered rules disagree** (EXP-002 → back to features; EXP-003 → costs). That
+   pattern — run another experiment, get the permissive answer — is exactly the shape of
+   experiment-shopping, and it deserves naming even though EXP-003 was authorised as a *repair* of a
+   broken instrument rather than a second bite. The adjudication is the reviewer's, not the
+   experimenter's, precisely because the experimenter has an obvious pull toward "go".
